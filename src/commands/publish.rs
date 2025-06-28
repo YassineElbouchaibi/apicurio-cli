@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use std::fs;
 
-use crate::config::{PublishConfig, load_global_config, load_repo_config};
+use crate::config::{load_global_config, load_repo_config, PublishConfig};
 use crate::constants::APICURIO_CONFIG;
 use crate::registry::RegistryClient;
 

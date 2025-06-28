@@ -1,5 +1,5 @@
 use crate::{constants::APICURIO_LOCK, lockfile::LockFile};
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use sha2::{Digest, Sha256};
 use std::{fs, path::PathBuf};
 

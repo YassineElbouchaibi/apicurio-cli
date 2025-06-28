@@ -1,7 +1,7 @@
-use crate::config::{AuthConfig, RegistryConfig, load_global_config, save_global_config};
-use anyhow::{Result, anyhow};
+use crate::config::{load_global_config, save_global_config, AuthConfig, RegistryConfig};
+use anyhow::{anyhow, Result};
 use clap::Subcommand;
-use std::io::{Write, stdin, stdout};
+use std::io::{stdin, stdout, Write};
 
 #[derive(Subcommand, Debug)]
 pub enum RegistryCommands {

@@ -1,7 +1,7 @@
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use dialoguer::{Input, Select};
-use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
+use fuzzy_matcher::FuzzyMatcher;
 
 /// Represents a parsed identifier in the format registry/group_id/artifact_id@version
 #[derive(Debug, Clone)]

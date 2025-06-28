@@ -1,5 +1,5 @@
 use crate::{
-    config::{GlobalConfig, load_global_config, load_repo_config},
+    config::{load_global_config, load_repo_config, GlobalConfig},
     constants::{APICURIO_CONFIG, APICURIO_LOCK},
     dependency::Dependency,
     lockfile::LockFile,

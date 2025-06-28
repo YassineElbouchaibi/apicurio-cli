@@ -1,12 +1,12 @@
 use crate::config::{AuthConfig, IfExistsAction, PublishConfig, RegistryConfig};
 use anyhow::Result;
 use reqwest::{
+    header::{HeaderMap, HeaderValue, AUTHORIZATION},
     Client,
-    header::{AUTHORIZATION, HeaderMap, HeaderValue},
 };
 use semver::Version;
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::env;
 
 /// Suggest a version bump for a given version string

@@ -1,5 +1,5 @@
 use crate::{config::load_repo_config, constants::APICURIO_CONFIG, identifier::Identifier};
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use dialoguer::Select;
 use std::{fs, path::PathBuf};
 

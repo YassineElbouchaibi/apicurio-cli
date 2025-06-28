@@ -1,10 +1,10 @@
 use crate::{
-    config::{DependencyConfig, load_global_config, load_repo_config},
+    config::{load_global_config, load_repo_config, DependencyConfig},
     constants::APICURIO_CONFIG,
     identifier::Identifier,
     registry::RegistryClient,
 };
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use convert_case::{Case, Casing};
 use dialoguer::Input;
 use std::{fs, path::PathBuf};
