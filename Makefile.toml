@@ -58,12 +58,12 @@ args = ["clippy", "--", "-D", "warnings"]
 [tasks.format]
 description = "Format code"
 command = "cargo"
-args = ["fmt"]
+args = ["fmt", "--all"]
 
 [tasks.format-check]
 description = "Check if code is formatted"
 command = "cargo"
-args = ["fmt", "--", "--check"]
+args = ["fmt", "--all", "--", "--check"]
 
 [tasks.audit]
 description = "Security audit"
