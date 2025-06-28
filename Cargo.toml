@@ -1,6 +1,6 @@
 [package]
 name = "apicurio-cli"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "A powerful CLI tool for managing schema artifacts from Apicurio Registry with lockfile-based dependency management"
 license = "MIT OR Apache-2.0"
