@@ -57,8 +57,8 @@ pub async fn run(identifier_str: Option<String>) -> Result<()> {
         .await?;
 
     // Create registry client if not already created
-    let registry_client = if registry_client.is_some() {
-        registry_client.unwrap()
+    let registry_client = if let Some(client) = registry_client {
+        client
     } else {
         let registry_name = identifier.registry.as_ref().unwrap();
         let registry_config = regs
@@ -129,11 +129,11 @@ pub async fn run(identifier_str: Option<String>) -> Result<()> {
     if let Some(index) = existing_index {
         // Replace existing dependency
         repo.dependencies[index] = new_dependency;
-        println!("🔄 Replaced existing dependency: {}", dep_name);
+        println!("🔄 Replaced existing dependency: {dep_name}");
     } else {
         // Add new dependency
         repo.dependencies.push(new_dependency);
-        println!("✅ Added dependency: {}", dep_name);
+        println!("✅ Added dependency: {dep_name}");
     }
 
     // Save the configuration

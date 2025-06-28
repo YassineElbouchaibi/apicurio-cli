@@ -94,8 +94,10 @@ pub struct RegistryConfig {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 #[serde(tag = "type")]
+#[derive(Default)]
 pub enum AuthConfig {
     /// No authentication (anonymous access)
+    #[default]
     None,
     /// HTTP Basic authentication
     Basic {
@@ -205,8 +207,10 @@ pub enum ArtifactType {
 /// Behavior when publishing an artifact that already exists
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[derive(Default)]
 pub enum IfExistsAction {
     /// Fail if artifact already exists
+    #[default]
     Fail,
     /// Create a new version if artifact exists
     CreateVersion,
@@ -278,7 +282,7 @@ impl RepoConfig {
         // 2) external file
         if let Some(path) = &self.external_registries_file {
             let contents = fs::read_to_string(path)
-                .with_context(|| format!("reading external registries from {}", path))?;
+                .with_context(|| format!("reading external registries from {path}"))?;
             let ext: GlobalConfig = serde_yaml::from_str(&contents)?;
             for reg in ext.registries {
                 map.insert(reg.name.clone(), reg);
@@ -288,19 +292,7 @@ impl RepoConfig {
         for reg in &self.registries {
             map.insert(reg.name.clone(), reg.clone());
         }
-        Ok(map.into_iter().map(|(_, v)| v).collect())
-    }
-}
-
-impl Default for AuthConfig {
-    fn default() -> Self {
-        AuthConfig::None
-    }
-}
-
-impl Default for IfExistsAction {
-    fn default() -> Self {
-        IfExistsAction::Fail
+        Ok(map.into_values().collect())
     }
 }
 
@@ -435,7 +427,7 @@ impl ArtifactReference {
     }
 }
 
-pub fn load_repo_config(path: &PathBuf) -> anyhow::Result<RepoConfig> {
+pub fn load_repo_config(path: &Path) -> anyhow::Result<RepoConfig> {
     let preprocessed_data = preprocess_config(path)?; // Preprocess the YAML file to expand environment variables
     let cfg: RepoConfig = serde_yaml::from_str(&preprocessed_data)?;
     Ok(cfg)
@@ -485,7 +477,7 @@ pub fn expand_env_placeholders(input: &str) -> String {
         let var = env::var(var_name).ok();
 
         match (var.as_deref(), op) {
-            (Some(v), _) if op == "" => v.to_string(), // ${VAR}
+            (Some(v), _) if op.is_empty() => v.to_string(), // ${VAR}
             (Some(v), ":-") if !v.is_empty() => v.to_string(), // ${VAR:-default}
             (None, ":-") => val.to_string(),
             (Some(v), "-") => {

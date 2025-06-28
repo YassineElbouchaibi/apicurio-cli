@@ -276,7 +276,7 @@ impl Identifier {
                     options.push("📝 Enter custom version".to_string());
 
                     let selection = Select::new()
-                        .with_prompt(&format!("Select version for {}/{}", group_id, artifact_id))
+                        .with_prompt(format!("Select version for {group_id}/{artifact_id}"))
                         .items(&options)
                         .default(0) // Default to latest version
                         .interact()?;
@@ -434,7 +434,7 @@ impl Identifier {
         let main_part = parts.join("/");
 
         if let Some(version) = &self.version {
-            format!("{}@{}", main_part, version)
+            format!("{main_part}@{version}")
         } else {
             main_part
         }

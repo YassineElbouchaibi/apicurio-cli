@@ -14,7 +14,7 @@ pub enum RegistryCommands {
 }
 
 fn prompt(msg: &str) -> Result<String> {
-    print!("{}: ", msg);
+    print!("{msg}: ");
     stdout().flush()?;
     let mut input = String::new();
     stdin().read_line(&mut input)?;
@@ -74,10 +74,10 @@ pub async fn run(cmd: RegistryCommands) -> Result<()> {
             let before = global.registries.len();
             global.registries.retain(|r| r.name != name);
             if global.registries.len() == before {
-                println!("no such registry '{}'", name);
+                println!("no such registry '{name}'");
             } else {
                 save_global_config(&global)?;
-                println!("removed '{}'", name);
+                println!("removed '{name}'");
             }
         }
     }

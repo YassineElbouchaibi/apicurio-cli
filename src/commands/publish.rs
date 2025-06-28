@@ -20,7 +20,7 @@ pub async fn run(name: Option<String>) -> Result<()> {
     let registries = repo_config.merge_registries(global_config)?;
 
     if repo_config.publishes.is_empty() {
-        println!("No publishes configured in {}", APICURIO_CONFIG);
+        println!("No publishes configured in {APICURIO_CONFIG}");
         return Ok(());
     }
 
@@ -39,7 +39,7 @@ pub async fn run(name: Option<String>) -> Result<()> {
         if let Some(filter_name) = name {
             anyhow::bail!("No publish configuration found with name '{}'", filter_name);
         } else {
-            println!("No publishes configured in {}", APICURIO_CONFIG);
+            println!("No publishes configured in {APICURIO_CONFIG}");
             return Ok(());
         }
     }

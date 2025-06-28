@@ -45,7 +45,7 @@ pub async fn run() -> Result<()> {
             .get(&health)
             .send()
             .await
-            .with_context(|| format!("cannot reach {}", health))?;
+            .with_context(|| format!("cannot reach {health}"))?;
     }
 
     // 3) check each dependency’s semver & registry existence

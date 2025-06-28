@@ -53,7 +53,12 @@ args = ["tarpaulin", "--out", "html"]
 [tasks.lint]
 description = "Run clippy linter"
 command = "cargo"
-args = ["clippy", "--", "-D", "warnings"]
+args = ["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"]
+
+[tasks.lint-fix]
+description = "Run clippy linter with auto-fix"
+command = "cargo"
+args = ["clippy", "--all-targets", "--all-features", "--fix", "--allow-dirty"]
 
 [tasks.format]
 description = "Format code"

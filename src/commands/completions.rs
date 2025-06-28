@@ -14,7 +14,7 @@ pub fn run(shell: String) -> Result<()> {
         "zsh" => generate(Zsh, &mut cmd, "apicurio", &mut io::stdout()),
         "fish" => generate(Fish, &mut cmd, "apicurio", &mut io::stdout()),
         other => {
-            eprintln!("unsupported shell '{}', choose: bash, zsh, fish", other);
+            eprintln!("unsupported shell '{other}', choose: bash, zsh, fish");
             std::process::exit(1);
         }
     }

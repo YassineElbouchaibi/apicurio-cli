@@ -20,8 +20,7 @@ pub async fn run(identifier_str: String) -> Result<()> {
 
     if matches.is_empty() {
         println!(
-            "No dependencies found matching identifier: '{}'",
-            identifier_str
+            "No dependencies found matching identifier: '{identifier_str}'"
         );
         println!("Available dependencies:");
         for dep in &repo.dependencies {
@@ -62,7 +61,7 @@ pub async fn run(identifier_str: String) -> Result<()> {
     if repo.dependencies.len() < before_count {
         let serialized = serde_yaml::to_string(&repo)?;
         fs::write(repo_path, serialized)?;
-        println!("✅ Removed dependency: {}", dependency_name);
+        println!("✅ Removed dependency: {dependency_name}");
     } else {
         return Err(anyhow!("Failed to remove dependency: {}", dependency_name));
     }

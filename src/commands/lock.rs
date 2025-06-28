@@ -211,12 +211,11 @@ fn cleanup_changed_output_paths(
                 if old_file.exists() {
                     match std::fs::remove_file(&old_file) {
                         Ok(()) => {
-                            println!("🗑️  Removed old output file: {}", old_path);
+                            println!("🗑️  Removed old output file: {old_path}");
                         }
                         Err(e) => {
                             eprintln!(
-                                "Warning: Failed to remove old output file '{}': {}",
-                                old_path, e
+                                "Warning: Failed to remove old output file '{old_path}': {e}"
                             );
                         }
                     }
@@ -234,14 +233,12 @@ fn cleanup_changed_output_paths(
                 match std::fs::remove_file(&old_file) {
                     Ok(()) => {
                         println!(
-                            "🗑️  Removed output file for removed dependency '{}': {}",
-                            dep_name, old_path
+                            "🗑️  Removed output file for removed dependency '{dep_name}': {old_path}"
                         );
                     }
                     Err(e) => {
                         eprintln!(
-                            "Warning: Failed to remove output file for removed dependency '{}': {}",
-                            dep_name, e
+                            "Warning: Failed to remove output file for removed dependency '{dep_name}': {e}"
                         );
                     }
                 }

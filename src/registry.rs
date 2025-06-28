@@ -23,10 +23,10 @@ fn suggest_version_bump(version: &str) -> String {
             if let Ok(patch) = suffix.parse::<u64>() {
                 format!("{}{}", prefix, patch + 1)
             } else {
-                format!("{}.1", version)
+                format!("{version}.1")
             }
         } else {
-            format!("{}.1", version)
+            format!("{version}.1")
         }
     }
 }
@@ -57,8 +57,8 @@ impl RegistryClient {
                 password_env,
             } => {
                 let pw = env::var(password_env)?;
-                let token = base64::encode_config(format!("{}:{}", username, pw), base64::STANDARD);
-                let hv = HeaderValue::from_str(&format!("Basic {}", token))?;
+                let token = base64::encode_config(format!("{username}:{pw}"), base64::STANDARD);
+                let hv = HeaderValue::from_str(&format!("Basic {token}"))?;
                 headers.insert(AUTHORIZATION, hv);
             }
             AuthConfig::Token { token_env } => {
@@ -68,7 +68,7 @@ impl RegistryClient {
             }
             AuthConfig::Bearer { token_env } => {
                 let tok = env::var(token_env)?;
-                let hv = HeaderValue::from_str(&format!("Bearer {}", tok))?;
+                let hv = HeaderValue::from_str(&format!("Bearer {tok}"))?;
                 headers.insert(AUTHORIZATION, hv);
             }
         }

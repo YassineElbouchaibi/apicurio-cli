@@ -206,7 +206,7 @@ impl LockFile {
             && self_map.iter().all(|(name, dep)| {
                 other_map
                     .get(name)
-                    .map_or(false, |other_dep| **dep == **other_dep)
+                    .is_some_and(|other_dep| **dep == **other_dep)
             })
     }
 
@@ -279,22 +279,20 @@ mod tests {
         for (name, group_id, artifact_id, version, registry, output_path) in dependencies {
             deps.push_str(&format!(
                 r#"
-  - name: "{}"
-    groupId: "{}"
-    artifactId: "{}"
-    version: "{}"
-    registry: "{}"
-    outputPath: "{}"
-"#,
-                name, group_id, artifact_id, version, registry, output_path
+  - name: "{name}"
+    groupId: "{group_id}"
+    artifactId: "{artifact_id}"
+    version: "{version}"
+    registry: "{registry}"
+    outputPath: "{output_path}"
+"#
             ));
         }
 
         format!(
             r#"externalRegistriesFile: null
 registries: []
-dependencies:{}"#,
-            deps
+dependencies:{deps}"#
         )
     }
 
@@ -311,8 +309,7 @@ dependencies:{}"#,
             registry: registry.to_string(),
             resolved_version: resolved_version.to_string(),
             download_url: format!(
-                "https://example.com/{}/{}/{}",
-                group_id, artifact_id, resolved_version
+                "https://example.com/{group_id}/{artifact_id}/{resolved_version}"
             ),
             sha256: "dummy_hash".to_string(),
             output_path: "./protos".to_string(),
