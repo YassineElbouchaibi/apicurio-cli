@@ -1,0 +1,38 @@
+# Global Apicurio Registry Configuration
+#
+# This file defines registries that are shared across all projects.
+# Place this file at ~/.config/apicurio/registries.yaml or set
+# APICURIO_REGISTRIES_PATH environment variable to a custom location.
+
+registries:
+  # Company-wide production registry
+  - name: company-prod
+    url: https://registry.company.com
+    auth:
+      type: bearer
+      tokenEnv: COMPANY_REGISTRY_TOKEN
+
+  # Shared staging environment
+  - name: company-staging
+    url: https://staging-registry.company.com
+    auth:
+      type: bearer
+      tokenEnv: COMPANY_STAGING_TOKEN
+
+  # Public registries (if any)
+  - name: public-schemas
+    url: https://public-registry.example.com
+    auth:
+      type: none
+
+  # Partner/external registries
+  - name: partner-api
+    url: https://api-registry.partner.com
+    auth:
+      type: token
+      tokenEnv: PARTNER_API_TOKEN
+
+# Example environment variables to set:
+# export COMPANY_REGISTRY_TOKEN="your-production-token"
+# export COMPANY_STAGING_TOKEN="your-staging-token"
+# export PARTNER_API_TOKEN="your-partner-token"

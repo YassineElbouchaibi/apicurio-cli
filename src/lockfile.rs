@@ -1,39 +1,100 @@
+//! Lock file management for reproducible builds
+//!
+//! This module handles the creation, loading, and validation of lock files that ensure
+//! reproducible builds by recording exact versions, download URLs, and content hashes
+//! of all dependencies.
+//!
+//! ## Lock File Format
+//!
+//! The lock file (`apicuriolock.yaml`) contains:
+//! - Exact resolved versions of all dependencies
+//! - Download URLs used to fetch artifacts
+//! - SHA256 checksums for integrity verification
+//! - Metadata about when the lock was generated
+//! - Hash of the configuration that generated the lock
+//!
+//! ## Integrity Verification
+//!
+//! Lock files include multiple layers of integrity verification:
+//! - Configuration hash to detect config changes
+//! - File modification timestamps
+//! - SHA256 checksums of downloaded content
+//! - Lockfile format version for compatibility
+
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{fs, path::Path};
 
+/// A locked dependency with exact version and integrity information
+///
+/// Represents a dependency that has been resolved to an exact version
+/// with all information needed for reproducible fetching.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct LockedDependency {
+    /// Local name/alias of the dependency
     pub name: String,
+    /// Registry name where this dependency was resolved
     pub registry: String,
+    /// Exact resolved version (no semver ranges)
     pub resolved_version: String,
+    /// Full URL used to download the artifact
     pub download_url: String,
+    /// SHA256 checksum of the downloaded content
     pub sha256: String,
+    /// Local path where the artifact is stored
     pub output_path: String,
+    /// Group ID of the artifact
     pub group_id: String,
+    /// Artifact ID in the registry
     pub artifact_id: String,
-    pub version_spec: String, // Original semver spec from config
+    /// Original version specification from config (e.g., "^1.0.0")
+    pub version_spec: String,
 }
 
+/// Lock file containing all resolved dependencies and metadata
+///
+/// The lock file ensures reproducible builds by recording exact versions
+/// and integrity information for all dependencies.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct LockFile {
+    /// List of all locked dependencies
     pub locked_dependencies: Vec<LockedDependency>,
-    // Metadata for lock integrity
+    /// Version of the lockfile format for compatibility
     pub lockfile_version: u32,
-    pub config_hash: String,  // Hash of the config that generated this lock
-    pub generated_at: String, // ISO timestamp with nanosecond precision
-    pub config_modified: Option<String>, // Config file modification time
+    /// Hash of the configuration that generated this lock
+    pub config_hash: String,
+    /// Timestamp when this lock was generated (nanoseconds since epoch)
+    pub generated_at: String,
+    /// Configuration file modification time (nanoseconds since epoch)
+    pub config_modified: Option<String>,
 }
 
 impl LockFile {
+    /// Load a lock file from disk
+    ///
+    /// # Arguments
+    /// * `path` - Path to the lock file
+    ///
+    /// # Returns
+    /// Parsed lock file structure
+    ///
+    /// # Errors
+    /// Returns error if file cannot be read or parsed as valid YAML
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         let data = fs::read_to_string(path)?;
         let lf: LockFile = serde_yaml::from_str(&data)?;
         Ok(lf)
     }
 
+    /// Save the lock file to disk
+    ///
+    /// # Arguments
+    /// * `path` - Path where to save the lock file
+    ///
+    /// # Errors
+    /// Returns error if file cannot be written or serialized
     pub fn save(&self, path: &Path) -> anyhow::Result<()> {
         let data = serde_yaml::to_string(self)?;
         fs::write(path, data)?;
@@ -41,12 +102,21 @@ impl LockFile {
     }
 
     /// Create a new lockfile with current timestamp and version
+    ///
+    /// # Arguments
+    /// * `locked_dependencies` - Vector of resolved dependencies
+    /// * `config_hash` - Hash of the configuration that generated this lock
     #[allow(dead_code)]
     pub fn new(locked_dependencies: Vec<LockedDependency>, config_hash: String) -> Self {
         Self::with_config_modified(locked_dependencies, config_hash, None)
     }
 
     /// Create a new lockfile with config modification time
+    ///
+    /// # Arguments
+    /// * `locked_dependencies` - Vector of resolved dependencies
+    /// * `config_hash` - Hash of the configuration
+    /// * `config_modified` - Optional config file modification timestamp
     pub fn with_config_modified(
         locked_dependencies: Vec<LockedDependency>,
         config_hash: String,

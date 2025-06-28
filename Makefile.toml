@@ -1,7 +1,203 @@
+# Apicurio CLI Development Tasks
+[config]
+default_to_workspace = false
+
+# Build tasks
+[tasks.build]
+description = "Build the project"
+command = "cargo"
+args = ["build"]
+
+[tasks.build-release]
+description = "Build release version"
+command = "cargo"
+args = ["build", "--release"]
+
+[tasks.install]
+description = "Install the CLI locally"
+command = "cargo"
+args = ["install", "--path", "."]
+
+[tasks.install-dev]
+description = "Install development dependencies"
+command = "cargo"
+args = ["install", "cargo-watch", "cargo-tarpaulin", "cargo-audit"]
+
+# Test tasks
+[tasks.test]
+description = "Run all tests"
+command = "cargo"
+args = ["test"]
+
+[tasks.test-unit]
+description = "Run unit tests only"
+command = "cargo"
+args = ["test", "--lib"]
+
+[tasks.test-integration]
+description = "Run integration tests (requires running registry)"
+command = "cargo"
+args = ["test", "lockfile_integration"]
+
+[tasks.test-watch]
+description = "Run tests in watch mode"
+command = "cargo"
+args = ["watch", "-x", "test"]
+
+[tasks.test-coverage]
+description = "Generate test coverage report"
+command = "cargo"
+args = ["tarpaulin", "--out", "html"]
+
+# Quality tasks
+[tasks.lint]
+description = "Run clippy linter"
+command = "cargo"
+args = ["clippy", "--", "-D", "warnings"]
+
+[tasks.format]
+description = "Format code"
+command = "cargo"
+args = ["fmt"]
+
+[tasks.format-check]
+description = "Check if code is formatted"
+command = "cargo"
+args = ["fmt", "--", "--check"]
+
+[tasks.audit]
+description = "Security audit"
+command = "cargo"
+args = ["audit"]
+
+[tasks.check]
+description = "Run all quality checks"
+dependencies = ["format-check", "lint", "test"]
+
+# Documentation tasks
+[tasks.doc]
+description = "Generate documentation"
+command = "cargo"
+args = ["doc", "--no-deps"]
+
+[tasks.doc-open]
+description = "Generate and open documentation"
+command = "cargo"
+args = ["doc", "--no-deps", "--open"]
+
+[tasks.doc-all]
+description = "Generate documentation with dependencies"
+command = "cargo"
+args = ["doc"]
+
+# Development environment tasks
 [tasks.start-docker-env]
 description = "Start the docker environment"
 command = "docker-compose"
 args = ["-f", "docker-compose.dev.yml", "up", "-d"]
+
+[tasks.stop-docker-env]
+description = "Stop the docker environment"
+command = "docker-compose"
+args = ["-f", "docker-compose.dev.yml", "down"]
+
+[tasks.registry-status]
+description = "Check registry status"
+script = '''
+curl -s http://localhost:8080/apis/registry/v2/system/info | jq . || echo "Registry not responding"
+'''
+
+# Example workflows
+[tasks.examples]
+description = "Run example workflows"
+script = '''
+echo "Running example workflows..."
+mkdir -p tmp/example
+cd tmp/example
+../../target/debug/apicurio init
+echo "✓ Project initialized"
+'''
+
+[tasks.demo]
+description = "Full demo setup"
+dependencies = ["build", "start-docker-env"]
+script = '''
+echo "Setting up demo environment..."
+sleep 5
+mkdir -p tmp/demo
+cd tmp/demo
+../../target/debug/apicurio init
+echo "Demo environment ready in tmp/demo/"
+'''
+
+# Cleanup tasks
+[tasks.clean]
+description = "Clean build artifacts"
+command = "cargo"
+args = ["clean"]
+
+[tasks.clean-examples]
+description = "Clean example directories"
+script = "rm -rf tmp/"
+
+[tasks.clean-all]
+description = "Clean everything including registry"
+dependencies = ["clean", "clean-examples", "stop-docker-env"]
+
+# Release tasks
+[tasks.version-patch]
+description = "Bump patch version"
+script = '''
+echo "Current version: $(grep '^version = ' Cargo.toml | cut -d'"' -f2)"
+read -p "Enter new patch version (x.y.z): " version
+sed -i.bak "s/^version = .*/version = \"$version\"/" Cargo.toml
+rm Cargo.toml.bak
+echo "Version updated to $version"
+'''
+
+[tasks.changelog]
+description = "Update changelog"
+script = '''
+echo "Please update CHANGELOG.md with recent changes"
+echo "Current date: $(date +%Y-%m-%d)"
+'''
+
+# Development workflow
+[tasks.dev]
+description = "Set up development environment"
+dependencies = ["build", "start-docker-env", "examples"]
+
+# Continuous integration simulation
+[tasks.ci]
+description = "Simulate CI pipeline"
+dependencies = ["check", "test-integration"]
+
+# Pre-commit hook
+[tasks.pre-commit]
+description = "Run pre-commit checks"
+dependencies = ["format", "lint", "test"]
+
+# Publishing tasks
+[tasks.publish-check]
+description = "Check if ready to publish"
+dependencies = ["check", "test"]
+script = "./scripts/check-publish.sh"
+
+[tasks.publish-dry-run]
+description = "Test publish without actually publishing"
+command = "cargo"
+args = ["publish", "--dry-run"]
+
+[tasks.release]
+description = "Create a new release (requires version argument)"
+script = '''
+if [ -z "$1" ]; then
+    echo "Usage: cargo make release -- <version>"
+    echo "Example: cargo make release -- 0.1.0"
+    exit 1
+fi
+./scripts/release.sh "$1"
+'''
 
 [tasks.populate-protos]
 description = "Wait for Apicurio and populate simple .proto artifacts (multiple versions)"
@@ -79,7 +275,7 @@ EOF
     "$REGISTRY_URL/groups/$GROUP/artifacts?ifExists=CREATE_VERSION")
 
   if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
-    echo "✅ Uploaded $ARTIFACT_ID@$VERSION"
+    echo "✅ $ARTIFACT_ID@$VERSION uploaded successfully"
   else
     echo "❌ Failed to upload $ARTIFACT_ID@$VERSION (HTTP $HTTP_STATUS)"
   fi
@@ -87,83 +283,48 @@ EOF
   rm -f "$DUMP_FILE"
 }
 
-# === versions to publish ===
-VERSIONS=("1.0.0" "1.0.1" "1.1.0" "1.1.1" "1.2.1" "2.1.1")
-
-# === text_message.proto === (no references) ===
-TEXT_MESSAGE_PROTO=$(cat <<'EOP'
-syntax = "proto3";
+# Define Proto file contents
+TEXT_MESSAGE_PROTO='syntax = "proto3";
 
 package com.example.v1;
 
 message TextMessage {
-  string text = 1;
+  string id = 1;
+  string content = 2;
+  int64 timestamp = 3;
 }
-EOP
-)
+'
 
-for VERSION in "${VERSIONS[@]}"; do
-  upload_artifact \
-    "com.example.v1.TextMessage" \
-    "$VERSION" \
-    "TextMessage" \
-    "Simple text message type" \
-    '{"type":"message","format":"text"}' \
-    '[]' \
-    "$TEXT_MESSAGE_PROTO"
-done
-
-# === ping.proto === (references TextMessage) ===
-PING_PROTO=$(cat <<'EOP'
-syntax = "proto3";
-
-package com.example.v1;
-
-import "text_message.proto";
-
-service PingService {
-  rpc Ping(TextMessage) returns (TextMessage);
-}
-EOP
-)
-
-for VERSION in "${VERSIONS[@]}"; do
-  upload_artifact \
-    "com.example.v1.PingService" \
-    "$VERSION" \
-    "PingService" \
-    "Ping service that echoes text" \
-    '{"type":"service","protocol":"ping"}' \
-    '[{"groupId":"default","artifactId":"com.example.v1.TextMessage","version":"'"$VERSION"'","name":"text_message.proto"}]' \
-    "$PING_PROTO"
-done
-
-# === echo.proto === (references TextMessage) ===
-ECHO_PROTO=$(cat <<'EOP'
-syntax = "proto3";
+ECHO_SERVICE_PROTO='syntax = "proto3";
 
 package com.example.v1;
 
 import "text_message.proto";
 
 service EchoService {
-  rpc Echo(TextMessage) returns (TextMessage);
+  rpc Echo(EchoRequest) returns (EchoResponse);
 }
-EOP
-)
 
-for VERSION in "${VERSIONS[@]}"; do
-  upload_artifact \
-    "com.example.v1.EchoService" \
-    "$VERSION" \
-    "EchoService" \
-    "Echo service that repeats text" \
-    '{"type":"service","protocol":"echo"}' \
-    '[{"groupId":"default","artifactId":"com.example.v1.TextMessage","version":"'"$VERSION"'","name":"text_message.proto"}]' \
-    "$ECHO_PROTO"
-done
+message EchoRequest {
+  string message = 1;
+}
+
+message EchoResponse {
+  TextMessage response = 1;
+}
+'
+
+# Upload artifacts with different versions
+upload_artifact "com.example.v1.TextMessage" "2.0.0" "Text Message Proto" "Basic text message structure" '{"format": "protobuf", "domain": "messaging"}' '[]' "$TEXT_MESSAGE_PROTO"
+upload_artifact "com.example.v1.TextMessage" "2.1.0" "Text Message Proto" "Enhanced text message with metadata" '{"format": "protobuf", "domain": "messaging"}' '[]' "$TEXT_MESSAGE_PROTO"
+upload_artifact "com.example.v1.TextMessage" "2.1.1" "Text Message Proto" "Text message with bug fixes" '{"format": "protobuf", "domain": "messaging"}' '[]' "$TEXT_MESSAGE_PROTO"
+
+upload_artifact "com.example.v1.EchoService" "2.0.0" "Echo Service Proto" "Simple echo service definition" '{"format": "protobuf", "domain": "services"}' '[{"groupId": "default", "artifactId": "com.example.v1.TextMessage", "version": "2.1.1", "name": "text_message.proto"}]' "$ECHO_SERVICE_PROTO"
+upload_artifact "com.example.v1.EchoService" "2.1.0" "Echo Service Proto" "Enhanced echo service" '{"format": "protobuf", "domain": "services"}' '[{"groupId": "default", "artifactId": "com.example.v1.TextMessage", "version": "2.1.1", "name": "text_message.proto"}]' "$ECHO_SERVICE_PROTO"
+
+echo "✅ All artifacts uploaded successfully"
 '''
 
 [tasks.start-and-populate]
-description = "Start the docker environment and populate it with 3 protos (multiple versions)"
+description = "Start the docker environment and populate it with 2 protos (multiple versions)"
 dependencies = ["start-docker-env", "populate-protos"]

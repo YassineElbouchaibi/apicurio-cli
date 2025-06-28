@@ -1,3 +1,32 @@
+//! Command implementations for the Apicurio CLI
+//!
+//! This module contains all the command implementations for the CLI tool.
+//! Each command is implemented in its own module and handles a specific
+//! aspect of dependency management or registry interaction.
+//!
+//! ## Command Categories
+//!
+//! ### Core Dependency Management
+//! - `init` - Initialize a new project
+//! - `pull` - Fetch dependencies
+//! - `update` - Update dependencies to latest matching versions
+//! - `lock` - Update lock file without downloading
+//!
+//! ### Dependency Lifecycle
+//! - `add` - Add new dependencies
+//! - `remove` - Remove existing dependencies
+//! - `list` - List configured dependencies
+//! - `status` - Check for outdated dependencies
+//!
+//! ### Registry Operations
+//! - `registry` - Manage registry configurations
+//! - `publish` - Publish artifacts to registries
+//!
+//! ### Validation & Utilities
+//! - `verify` - Verify integrity of downloaded files
+//! - `doctor` - Validate configuration and connectivity
+//! - `completions` - Generate shell completion scripts
+
 use anyhow::Result;
 use clap::Subcommand;
 
@@ -15,6 +44,11 @@ pub mod status;
 pub mod update;
 pub mod verify;
 
+/// All available CLI commands
+///
+/// Each variant corresponds to a subcommand that can be executed.
+/// Commands are organized by functionality and include comprehensive
+/// help text for user guidance.
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     #[command(about = concat!(
@@ -75,6 +109,16 @@ pub enum Commands {
     Lock,
 }
 
+/// Command dispatcher that routes to the appropriate command implementation
+///
+/// Takes a parsed command and delegates to the corresponding module's run function.
+/// All commands are async to support network operations and file I/O.
+///
+/// # Arguments
+/// * `cmd` - The command to execute
+///
+/// # Returns
+/// Result indicating success or failure of the command execution
 pub async fn run(cmd: Commands) -> Result<()> {
     match cmd {
         Commands::Pull => pull::run().await,
