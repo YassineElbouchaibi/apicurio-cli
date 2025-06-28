@@ -19,9 +19,7 @@ pub async fn run(identifier_str: String) -> Result<()> {
     let matches = identifier.find_matches(&repo.dependencies);
 
     if matches.is_empty() {
-        println!(
-            "No dependencies found matching identifier: '{identifier_str}'"
-        );
+        println!("No dependencies found matching identifier: '{identifier_str}'");
         println!("Available dependencies:");
         for dep in &repo.dependencies {
             println!("  - {} ({}@{})", dep.name, dep.artifact_id, dep.version);

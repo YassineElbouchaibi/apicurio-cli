@@ -79,6 +79,10 @@ args = ["audit"]
 description = "Run all quality checks"
 dependencies = ["format-check", "lint", "test"]
 
+[tasks.fix]
+description = "Run all fixable quality tasks"
+dependencies = ["format", "lint-fix"]
+
 # Documentation tasks
 [tasks.doc]
 description = "Generate documentation"
