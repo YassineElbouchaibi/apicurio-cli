@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,24 +16,24 @@ jobs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ steps.get_version.outputs.VERSION }}
     steps:
-    - name: Get version from tag
-      id: get_version
-      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release v${{ steps.get_version.outputs.VERSION }}
-        draft: false
-        prerelease: false
-        body: |
-          Release v${{ steps.get_version.outputs.VERSION }}
-          
-          See [CHANGELOG.md](https://github.com/YassineElbouchaibi/apicurio-cli/blob/main/CHANGELOG.md) for details.
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release v${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          body: |
+            Release v${{ steps.get_version.outputs.VERSION }}
+
+            See [CHANGELOG.md](https://github.com/YassineElbouchaibi/apicurio-cli/blob/main/CHANGELOG.md) for details.
 
   build:
     name: Build Release Binaries
@@ -59,98 +59,82 @@ jobs:
             archive_name: apicurio-windows-x64.zip
 
     runs-on: ${{ matrix.os }}
-    
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: ${{ matrix.target }}
-    
-    - name: Install cross compilation tools
-      if: matrix.target == 'x86_64-pc-windows-gnu'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-mingw-w64-x86-64
-    
-    - name: Cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-    
-    - name: Cache cargo index
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-    
-    - name: Build binary
-      run: cargo build --release --target ${{ matrix.target }}
-    
-    - name: Create archive (Unix)
-      if: matrix.os != 'windows-latest' && !endsWith(matrix.archive_name, '.zip')
-      run: |
-        cd target/${{ matrix.target }}/release
-        tar czf ../../../${{ matrix.archive_name }} ${{ matrix.binary_name }}
-        cd -
-    
-    - name: Create archive (Windows)
-      if: endsWith(matrix.archive_name, '.zip')
-      run: |
-        cd target/${{ matrix.target }}/release
-        zip ../../../${{ matrix.archive_name }} ${{ matrix.binary_name }}
-        cd -
-    
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.create-release.outputs.upload_url }}
-        asset_path: ./${{ matrix.archive_name }}
-        asset_name: ${{ matrix.archive_name }}
-        asset_content_type: application/octet-stream
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross compilation tools
+        if: matrix.target == 'x86_64-pc-windows-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64-x86-64
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Create archive (Unix)
+        if: matrix.os != 'windows-latest' && !endsWith(matrix.archive_name, '.zip')
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../${{ matrix.archive_name }} ${{ matrix.binary_name }}
+          cd -
+
+      - name: Create archive (Windows)
+        if: endsWith(matrix.archive_name, '.zip')
+        run: |
+          cd target/${{ matrix.target }}/release
+          zip ../../../${{ matrix.archive_name }} ${{ matrix.binary_name }}
+          cd -
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./${{ matrix.archive_name }}
+          asset_name: ${{ matrix.archive_name }}
+          asset_content_type: application/octet-stream
 
   publish-crate:
     name: Publish to crates.io
     runs-on: ubuntu-latest
     needs: create-release
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-    
-    - name: Cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-    
-    - name: Cache cargo index
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-    
-    - name: Publish to crates.io
-      run: cargo publish --token ${{ secrets.CARGO_TOKEN }}
 
-  update-homebrew:
-    name: Update Homebrew Formula
-    runs-on: macos-latest
-    needs: [create-release, build]
-    
     steps:
-    - name: Update Homebrew formula
-      run: |
-        echo "This step would update a Homebrew formula"
-        echo "Version: ${{ needs.create-release.outputs.version }}"
-        # TODO: Implement Homebrew formula update
-        # This would typically involve:
-        # 1. Calculating SHA256 of the release archive
-        # 2. Updating a Homebrew tap repository
-        # 3. Creating a PR to the tap repository
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Publish to crates.io
+        run: cargo publish --token ${{ secrets.CARGO_TOKEN }}
