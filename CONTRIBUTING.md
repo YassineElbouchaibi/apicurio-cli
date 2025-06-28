@@ -246,7 +246,7 @@ mod tests {
 cargo test
 
 # Unit tests only
-cargo test --lib
+cargo test
 
 # Integration tests only
 cargo test --test integration

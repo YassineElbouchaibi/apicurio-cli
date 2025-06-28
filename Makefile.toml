@@ -32,7 +32,7 @@ args = ["test"]
 [tasks.test-unit]
 description = "Run unit tests only"
 command = "cargo"
-args = ["test", "--lib"]
+args = ["test"]
 
 [tasks.test-integration]
 description = "Run integration tests (requires running registry)"
