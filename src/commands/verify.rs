@@ -8,7 +8,7 @@ pub async fn run() -> Result<()> {
     let mut all_ok = true;
 
     for ld in &lock.locked_dependencies {
-        let file = PathBuf::from(&ld.output_path).join(format!("{}.proto", ld.name));
+        let file = PathBuf::from(&ld.output_path);
         if !file.exists() {
             println!("❌ missing file for {}: {}", ld.name, file.display());
             all_ok = false;

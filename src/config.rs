@@ -40,7 +40,7 @@ pub enum AuthConfig {
     },
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DependencyConfig {
     pub name: String,

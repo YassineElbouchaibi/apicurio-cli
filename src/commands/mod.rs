@@ -29,10 +29,22 @@ pub enum Commands {
         about = "Re-resolve semver ranges in config to latest matches; download ⇒ overwrite lock"
     )]
     Update,
-    #[command(about = "Add a new dependency entry to the config (interactive prompts)")]
-    Add { name: String },
-    #[command(about = "Remove an existing dependency by name")]
-    Remove { name: String },
+    #[command(
+        about = "Add a new dependency entry to the config using format registry/group_id/artifact_id@version"
+    )]
+    Add {
+        #[arg(
+            help = "Dependency identifier in format registry/group_id/artifact_id@version (all parts optional, will prompt for missing)"
+        )]
+        identifier: Option<String>,
+    },
+    #[command(about = "Remove an existing dependency by identifier")]
+    Remove {
+        #[arg(
+            help = "Dependency identifier in format registry/group_id/artifact_id@version (partial matches supported)"
+        )]
+        identifier: String,
+    },
     #[command(
         about = "Print all configured deps (spec'd & locked versions), and registries (no network)"
     )]
@@ -63,8 +75,8 @@ pub async fn run(cmd: Commands) -> Result<()> {
         Commands::Pull => pull::run().await,
         Commands::Update => update::run().await,
         Commands::Init => init::run().await,
-        Commands::Add { name } => add::run(name).await,
-        Commands::Remove { name } => remove::run(name).await,
+        Commands::Add { identifier } => add::run(identifier).await,
+        Commands::Remove { identifier } => remove::run(identifier).await,
         Commands::List => list::run().await,
         Commands::Status => status::run().await,
         Commands::Verify => verify::run().await,

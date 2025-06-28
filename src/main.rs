@@ -2,8 +2,12 @@ mod commands;
 mod config;
 mod constants;
 mod dependency;
+mod identifier;
 mod lockfile;
 mod registry;
+
+#[cfg(test)]
+mod lockfile_integration_tests;
 
 use anyhow::Result;
 use clap::Parser;

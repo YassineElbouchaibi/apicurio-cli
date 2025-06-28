@@ -32,10 +32,11 @@ pub async fn run() -> Result<()> {
             .await?
             .bytes()
             .await?;
-        fs::create_dir_all(&dependency.output_path)?;
-        let file =
-            PathBuf::from(&dependency.output_path).join(format!("{}.proto", dependency.name));
-        fs::write(&file, &data)?;
+        let file_path = PathBuf::from(&dependency.output_path);
+        if let Some(parent) = file_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(&file_path, &data)?;
     }
 
     println!("✅ pull complete");

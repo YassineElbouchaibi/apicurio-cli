@@ -38,33 +38,36 @@ pub async fn run() -> Result<()> {
         let data = client
             .download(&dep.group_id, &dep.artifact_id, selected)
             .await?;
-        fs::create_dir_all(&dep.output_path)?;
-        let file = PathBuf::from(&dep.output_path).join(format!("{}.proto", dep.name));
-        fs::write(&file, &data)?;
+        let file_path = PathBuf::from(&dep.output_path);
+        if let Some(parent) = file_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(&file_path, &data)?;
         let sha = {
             let mut h = Sha256::new();
             h.update(&data);
             hex::encode(h.finalize())
         };
-        let url = format!(
-            "{}/apis/registry/v2/groups/{}/artifacts/{}/versions/{}/content",
-            client.base_url, dep.group_id, dep.artifact_id, selected
-        );
         locked.push(LockedDependency {
             name: dep.name.clone(),
             registry: dep.registry.clone(),
             resolved_version: selected.to_string(),
-            download_url: url,
+            download_url: client.get_download_url(&dep.group_id, &dep.artifact_id, selected),
             sha256: sha,
             output_path: dep.output_path.clone(),
+            group_id: dep.group_id.clone(),
+            artifact_id: dep.artifact_id.clone(),
+            version_spec: dep_cfg.version.clone(),
         });
     }
 
-    // save new lockfile
+    // save new lockfile with config modification time
     let lock_path = PathBuf::from(APICURIO_LOCK);
-    let lf = LockFile {
-        locked_dependencies: locked,
-    };
+    let config_path = PathBuf::from(APICURIO_CONFIG);
+    let config_content = std::fs::read_to_string(&config_path)?;
+    let config_hash = LockFile::compute_config_hash(&config_content, &repo_cfg.dependencies);
+    let config_modified = LockFile::get_config_modification_time(&config_path).ok();
+    let lf = LockFile::with_config_modified(locked, config_hash, config_modified);
     lf.save(&lock_path)?;
 
     println!("✅ update complete");

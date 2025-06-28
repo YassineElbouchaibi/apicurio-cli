@@ -26,7 +26,7 @@ pub async fn run() -> Result<()> {
         let dep = Dependency::from_config(dep_cfg)?;
 
         // locate the file we expect was generated/pulled earlier
-        let file_path = PathBuf::from(&dep.output_path).join(format!("{}.proto", dep.name));
+        let file_path = PathBuf::from(&dep.output_path);
         let data =
             fs::read(&file_path).with_context(|| format!("reading {}", file_path.display()))?;
 
