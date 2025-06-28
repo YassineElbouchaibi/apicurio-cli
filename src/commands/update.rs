@@ -3,15 +3,16 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 use crate::{
     config::{load_global_config, load_repo_config},
+    constants::{APICURIO_CONFIG, APICURIO_LOCK},
     dependency::Dependency,
     lockfile::{LockFile, LockedDependency},
     registry::RegistryClient,
 };
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 
 pub async fn run() -> Result<()> {
     // load configs
-    let repo_cfg = load_repo_config(&PathBuf::from("apicurioconfig.yaml"))?;
+    let repo_cfg = load_repo_config(&PathBuf::from(APICURIO_CONFIG))?;
     let global_cfg = load_global_config()?;
     let regs = repo_cfg.merge_registries(global_cfg)?;
 
@@ -60,8 +61,10 @@ pub async fn run() -> Result<()> {
     }
 
     // save new lockfile
-    let lock_path = PathBuf::from("apicuriolock.yaml");
-    let lf = LockFile { locked_dependencies: locked };
+    let lock_path = PathBuf::from(APICURIO_LOCK);
+    let lf = LockFile {
+        locked_dependencies: locked,
+    };
     lf.save(&lock_path)?;
 
     println!("✅ update complete");

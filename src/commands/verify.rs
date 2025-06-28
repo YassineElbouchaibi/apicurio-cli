@@ -1,10 +1,10 @@
+use crate::{constants::APICURIO_LOCK, lockfile::LockFile};
 use anyhow::{Result, anyhow};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use std::{fs, path::PathBuf};
-use crate::lockfile::LockFile;
 
 pub async fn run() -> Result<()> {
-    let lock = LockFile::load(&PathBuf::from("apicuriolock.yaml"))?;
+    let lock = LockFile::load(&PathBuf::from(APICURIO_LOCK))?;
     let mut all_ok = true;
 
     for ld in &lock.locked_dependencies {

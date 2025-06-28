@@ -16,7 +16,9 @@ pub mod verify;
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    #[command(about = "Scaffold a blank apicurioconfig.yaml (and empty lock) in a new repo")]
+    #[command(about = concat!(
+        "Scaffold a blank config (and empty lock) in a new repo"
+    ))]
     Init,
     #[command(
         about = "Fetch exactly what's in the lock; if no lock, resolve specs ⇒ download ⇒ lock"

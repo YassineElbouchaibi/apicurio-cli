@@ -1,5 +1,6 @@
 mod commands;
 mod config;
+mod constants;
 mod dependency;
 mod lockfile;
 mod registry;

@@ -1,9 +1,9 @@
+use crate::{config::load_repo_config, constants::APICURIO_CONFIG};
 use anyhow::Result;
 use std::{fs, path::PathBuf};
-use crate::config::load_repo_config;
 
 pub async fn run(name: String) -> Result<()> {
-    let repo_path = PathBuf::from("apicurioconfig.yaml");
+    let repo_path = PathBuf::from(APICURIO_CONFIG);
     let mut repo = load_repo_config(&repo_path)?;
     let before = repo.dependencies.len();
     repo.dependencies.retain(|d| d.name != name);

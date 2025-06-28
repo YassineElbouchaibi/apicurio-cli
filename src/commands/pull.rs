@@ -3,6 +3,7 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 use crate::{
     config::{load_global_config, load_repo_config},
+    constants::{APICURIO_CONFIG, APICURIO_LOCK},
     dependency::Dependency,
     lockfile::{LockFile, LockedDependency},
     registry::RegistryClient,
@@ -11,7 +12,7 @@ use sha2::{Digest, Sha256};
 
 pub async fn run() -> Result<()> {
     // 1) load configs
-    let repo_cfg = load_repo_config(&PathBuf::from("apicurioconfig.yaml"))?;
+    let repo_cfg = load_repo_config(&PathBuf::from(APICURIO_CONFIG))?;
     let global_cfg = load_global_config()?;
     let regs = repo_cfg.merge_registries(global_cfg)?;
     // build clients
@@ -20,7 +21,7 @@ pub async fn run() -> Result<()> {
         clients.insert(r.name.clone(), RegistryClient::new(r)?);
     }
 
-    let lock_path = PathBuf::from("apicuriolock.yaml");
+    let lock_path = PathBuf::from(APICURIO_LOCK);
     let mut locked: Vec<LockedDependency> = Vec::new();
 
     if lock_path.exists() {

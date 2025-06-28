@@ -1,10 +1,12 @@
 use anyhow::Context;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use std::{env, fs, path::PathBuf};
 
 #[derive(Deserialize, Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct RepoConfig {
-    #[serde(rename = "externalRegistriesFile")]
     pub external_registries_file: Option<String>,
     #[serde(default)]
     pub registries: Vec<RegistryConfig>,
@@ -13,6 +15,7 @@ pub struct RepoConfig {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct RegistryConfig {
     pub name: String,
     pub url: String,
@@ -21,22 +24,24 @@ pub struct RegistryConfig {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 #[serde(tag = "type")]
 pub enum AuthConfig {
-    #[serde(rename = "none")]
     None,
-    #[serde(rename = "basic")]
     Basic {
         username: String,
         password_env: String,
     },
-    #[serde(rename = "token")]
-    Token { token_env: String },
-    #[serde(rename = "bearer")]
-    Bearer { token_env: String },
+    Token {
+        token_env: String,
+    },
+    Bearer {
+        token_env: String,
+    },
 }
 
 #[derive(Deserialize, Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct DependencyConfig {
     pub name: String,
     pub group_id: String,
@@ -47,6 +52,7 @@ pub struct DependencyConfig {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct GlobalConfig {
     #[serde(default)]
     pub registries: Vec<RegistryConfig>,
@@ -84,9 +90,9 @@ impl Default for AuthConfig {
 }
 
 pub fn load_repo_config(path: &PathBuf) -> anyhow::Result<RepoConfig> {
-    let data = fs::read_to_string(path)
-        .with_context(|| format!("reading repo config {}", path.display()))?;
-    let cfg: RepoConfig = serde_yaml::from_str(&data)?;
+    let preprocessed_data = preprocess_config(path)?; // Preprocess the YAML file to expand environment variables
+    println!("Preprocessed config data:\n{}", preprocessed_data);
+    let cfg: RepoConfig = serde_yaml::from_str(&preprocessed_data)?;
     Ok(cfg)
 }
 
@@ -123,4 +129,37 @@ pub fn save_global_config(cfg: &GlobalConfig) -> anyhow::Result<()> {
     fs::write(&path, data)?;
     println!("Saved global registries to {}", path.display());
     Ok(())
+}
+
+pub fn expand_env_placeholders(input: &str) -> String {
+    let re = Regex::new(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(:?[-+])([^}]*))?\}").unwrap();
+    re.replace_all(input, |caps: &regex::Captures| {
+        let var_name = &caps[1];
+        let op = caps.get(2).map_or("", |m| m.as_str());
+        let val = caps.get(3).map_or("", |m| m.as_str());
+        let var = env::var(var_name).ok();
+
+        match (var.as_deref(), op) {
+            (Some(v), _) if op == "" => v.to_string(), // ${VAR}
+            (Some(v), ":-") if !v.is_empty() => v.to_string(), // ${VAR:-default}
+            (None, ":-") => val.to_string(),
+            (Some(v), "-") => {
+                if v.is_empty() {
+                    val.to_string()
+                } else {
+                    v.to_string()
+                }
+            } // ${VAR-default}
+            (None, "-") => val.to_string(),
+            (Some(v), ":+") if !v.is_empty() => val.to_string(), // ${VAR:+alt}
+            (Some(_), "+") => val.to_string(),                   // ${VAR+alt}
+            _ => "".to_string(),
+        }
+    })
+    .to_string()
+}
+
+pub fn preprocess_config(path: &Path) -> anyhow::Result<String> {
+    let raw_data = fs::read_to_string(path)?;
+    Ok(expand_env_placeholders(&raw_data))
 }

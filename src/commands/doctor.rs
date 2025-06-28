@@ -1,5 +1,6 @@
 use crate::{
     config::{GlobalConfig, load_global_config, load_repo_config},
+    constants::{APICURIO_CONFIG, APICURIO_LOCK},
     dependency::Dependency,
     lockfile::LockFile,
     registry::RegistryClient,
@@ -10,7 +11,7 @@ use std::{collections::HashSet, fs, path::PathBuf};
 
 pub async fn run() -> Result<()> {
     // 1) load repo + external + global, check duplicate names
-    let repo_cfg = load_repo_config(&PathBuf::from("apicurioconfig.yaml"))?;
+    let repo_cfg = load_repo_config(&PathBuf::from(APICURIO_CONFIG))?;
     let global_cfg = load_global_config()?;
     let mut seen = HashSet::new();
 
@@ -61,7 +62,7 @@ pub async fn run() -> Result<()> {
     }
 
     // 4) check lockfile semantic
-    let lf = LockFile::load(&PathBuf::from("apicuriolock.yaml")).context("loading lockfile")?;
+    let lf = LockFile::load(&PathBuf::from(APICURIO_LOCK)).context("loading lockfile")?;
     for ld in &lf.locked_dependencies {
         if !seen.contains(&ld.registry) {
             return Err(anyhow::anyhow!(

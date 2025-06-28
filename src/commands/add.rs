@@ -1,6 +1,6 @@
 use crate::{
-    config::DependencyConfig,
-    config::{load_global_config, load_repo_config},
+    config::{DependencyConfig, load_global_config, load_repo_config},
+    constants::APICURIO_CONFIG,
 };
 use anyhow::{Result, anyhow};
 use std::{
@@ -24,7 +24,7 @@ fn prompt(msg: &str) -> Result<String> {
 
 pub async fn run(name: String) -> Result<()> {
     // load and merge registries to show choices
-    let repo_path = PathBuf::from("apicurioconfig.yaml");
+    let repo_path = PathBuf::from(APICURIO_CONFIG);
     let mut repo = load_repo_config(&repo_path)?;
     let global = load_global_config()?;
     let regs = repo.merge_registries(global)?;

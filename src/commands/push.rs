@@ -4,13 +4,14 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 use crate::{
     config::{load_global_config, load_repo_config},
+    constants::APICURIO_CONFIG,
     dependency::Dependency,
     registry::RegistryClient,
 };
 
 pub async fn run() -> Result<()> {
     // 1) load repo + global + merged registries
-    let repo_cfg = load_repo_config(&PathBuf::from("apicurioconfig.yaml"))?;
+    let repo_cfg = load_repo_config(&PathBuf::from(APICURIO_CONFIG))?;
     let global_cfg = load_global_config()?;
     let regs = repo_cfg.merge_registries(global_cfg)?;
 
