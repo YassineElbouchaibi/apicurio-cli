@@ -31,19 +31,45 @@ pub async fn run(identifier_str: Option<String>) -> Result<()> {
 
     let registry_names: Vec<String> = regs.iter().map(|r| r.name.clone()).collect();
 
-    // Complete the identifier interactively (except version)
-    identifier.complete_interactive(&registry_names, &repo.dependencies)?;
+    // Get registry client for the selected/default registry
+    let registry_client = if let Some(registry_name) = &identifier.registry {
+        // Registry already specified, find it
+        let registry_config = regs
+            .iter()
+            .find(|r| &r.name == registry_name)
+            .ok_or_else(|| anyhow!("Registry '{}' not found", registry_name))?;
+        Some(RegistryClient::new(registry_config)?)
+    } else if regs.len() == 1 {
+        // Only one registry, use it
+        Some(RegistryClient::new(&regs[0])?)
+    } else {
+        // Multiple registries, will be selected during complete_interactive
+        None
+    };
 
-    // Now complete the version using registry access
-    if !identifier.is_complete() {
-        // Find the registry configuration for version completion
+    // Complete the identifier interactively (except version)
+    identifier
+        .complete_interactive(
+            &registry_names,
+            &repo.dependencies,
+            registry_client.as_ref(),
+        )
+        .await?;
+
+    // Create registry client if not already created
+    let registry_client = if registry_client.is_some() {
+        registry_client.unwrap()
+    } else {
         let registry_name = identifier.registry.as_ref().unwrap();
         let registry_config = regs
             .iter()
             .find(|r| &r.name == registry_name)
             .ok_or_else(|| anyhow!("Registry '{}' not found", registry_name))?;
+        RegistryClient::new(registry_config)?
+    };
 
-        let registry_client = RegistryClient::new(registry_config)?;
+    // Now complete the version using registry access
+    if !identifier.is_complete() {
         identifier
             .complete_version_with_registry(&registry_client)
             .await?;
@@ -53,7 +79,29 @@ pub async fn run(identifier_str: Option<String>) -> Result<()> {
         return Err(anyhow!("Failed to complete dependency identifier"));
     }
 
-    let default_output_path = generate_default_output_path(&identifier);
+    // Validate that the artifact exists in the registry
+    let artifact_exists = identifier
+        .validate_artifact_exists(&registry_client)
+        .await?;
+    if !artifact_exists {
+        return Err(anyhow!(
+            "Artifact '{}/{}' does not exist in registry '{}'",
+            identifier.group_id.as_ref().unwrap(),
+            identifier.artifact_id.as_ref().unwrap(),
+            identifier.registry.as_ref().unwrap()
+        ));
+    }
+
+    // Get artifact metadata to determine type for output path generation
+    let artifact_metadata = registry_client
+        .get_artifact_metadata(
+            identifier.group_id.as_ref().unwrap(),
+            identifier.artifact_id.as_ref().unwrap(),
+        )
+        .await?;
+
+    let default_output_path =
+        generate_default_output_path(&identifier, &artifact_metadata.artifact_type);
     let output_path = Input::new()
         .with_prompt("Output path")
         .default(default_output_path)
@@ -98,20 +146,95 @@ pub async fn run(identifier_str: Option<String>) -> Result<()> {
     Ok(())
 }
 
-fn generate_default_output_path(identifier: &Identifier) -> String {
+fn generate_default_output_path(identifier: &Identifier, artifact_type: &str) -> String {
     let artifact_id = identifier.artifact_id.as_ref().unwrap();
-    let mut parts = artifact_id
-        .split('.')
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-    let last = parts.pop().unwrap().to_case(Case::Snake);
 
-    let mut path = PathBuf::from("protos");
-    for seg in parts {
-        path.push(seg.to_lowercase());
+    match artifact_type.to_uppercase().as_str() {
+        "PROTOBUF" => {
+            // For protobuf files, use the original logic
+            let mut parts = artifact_id
+                .split('.')
+                .map(str::to_string)
+                .collect::<Vec<_>>();
+            let last = parts.pop().unwrap().to_case(Case::Snake);
+
+            let mut path = PathBuf::from("protos");
+            for seg in parts {
+                path.push(seg.to_lowercase());
+            }
+            path.push(last);
+            path.set_extension("proto");
+
+            path.to_string_lossy().into_owned()
+        }
+        "AVRO" => {
+            // For Avro schemas
+            let mut parts = artifact_id
+                .split('.')
+                .map(str::to_string)
+                .collect::<Vec<_>>();
+            let last = parts.pop().unwrap().to_case(Case::Snake);
+
+            let mut path = PathBuf::from("schemas");
+            for seg in parts {
+                path.push(seg.to_lowercase());
+            }
+            path.push(last);
+            path.set_extension("avsc");
+
+            path.to_string_lossy().into_owned()
+        }
+        "JSON" => {
+            // For JSON schemas
+            let mut parts = artifact_id
+                .split('.')
+                .map(str::to_string)
+                .collect::<Vec<_>>();
+            let last = parts.pop().unwrap().to_case(Case::Snake);
+
+            let mut path = PathBuf::from("schemas");
+            for seg in parts {
+                path.push(seg.to_lowercase());
+            }
+            path.push(last);
+            path.set_extension("json");
+
+            path.to_string_lossy().into_owned()
+        }
+        "OPENAPI" => {
+            // For OpenAPI specs
+            let mut parts = artifact_id
+                .split('.')
+                .map(str::to_string)
+                .collect::<Vec<_>>();
+            let last = parts.pop().unwrap().to_case(Case::Snake);
+
+            let mut path = PathBuf::from("openapi");
+            for seg in parts {
+                path.push(seg.to_lowercase());
+            }
+            path.push(last);
+            path.set_extension("yaml");
+
+            path.to_string_lossy().into_owned()
+        }
+        _ => {
+            // Default fallback for unknown types
+            let mut parts = artifact_id
+                .split('.')
+                .map(str::to_string)
+                .collect::<Vec<_>>();
+            let last = parts.pop().unwrap().to_case(Case::Snake);
+
+            let mut path = PathBuf::from("schemas");
+            for seg in parts {
+                path.push(seg.to_lowercase());
+            }
+            path.push(last);
+            // Use a generic extension for unknown types
+            path.set_extension("schema");
+
+            path.to_string_lossy().into_owned()
+        }
     }
-    path.push(last);
-    path.set_extension("proto");
-
-    path.to_string_lossy().into_owned()
 }

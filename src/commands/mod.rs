@@ -7,8 +7,8 @@ pub mod doctor;
 pub mod init;
 pub mod list;
 pub mod lock;
+pub mod publish;
 pub mod pull;
-pub mod push;
 pub mod registry;
 pub mod remove;
 pub mod status;
@@ -65,7 +65,12 @@ pub enum Commands {
     #[command(about = "Emit shell completion scripts (bash/zsh/fish)")]
     Completions { shell: String },
     #[command(about = "Publish to registries")]
-    Push,
+    Publish {
+        #[arg(
+            help = "Specific publish name to publish (if not provided, publishes all configured artifacts)"
+        )]
+        name: Option<String>,
+    },
     #[command(about = "Update the lockfile based on current dependencies")]
     Lock,
 }
@@ -83,7 +88,7 @@ pub async fn run(cmd: Commands) -> Result<()> {
         Commands::Registry { cmd } => registry::run(cmd).await,
         Commands::Doctor => doctor::run().await,
         Commands::Completions { shell } => completions::run(shell),
-        Commands::Push => push::run().await,
+        Commands::Publish { name } => publish::run(name).await,
         Commands::Lock => lock::run().await,
     }
 }

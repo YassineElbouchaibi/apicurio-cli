@@ -70,10 +70,11 @@ impl Identifier {
     }
 
     /// Complete missing fields by prompting the user with available options
-    pub fn complete_interactive(
+    pub async fn complete_interactive(
         &mut self,
         available_registries: &[String],
         existing_dependencies: &[crate::config::DependencyConfig],
+        registry_client: Option<&crate::registry::RegistryClient>,
     ) -> Result<()> {
         // Complete registry
         if self.registry.is_none() {
@@ -107,38 +108,125 @@ impl Identifier {
 
         // Complete group_id
         if self.group_id.is_none() {
-            let existing_group_ids: Vec<String> = existing_dependencies
-                .iter()
-                .map(|d| d.group_id.clone())
-                .collect::<std::collections::HashSet<_>>()
-                .into_iter()
-                .collect();
+            let available_group_ids: Vec<String>;
 
-            if !existing_group_ids.is_empty() {
-                println!("Existing group IDs: {}", existing_group_ids.join(", "));
+            // Try to fetch groups from the registry if available
+            if let Some(client) = registry_client {
+                match client.list_groups().await {
+                    Ok(registry_groups) => {
+                        available_group_ids = registry_groups;
+                    }
+                    Err(_) => {
+                        // Fall back to existing dependencies if registry query fails
+                        available_group_ids = existing_dependencies
+                            .iter()
+                            .map(|d| d.group_id.clone())
+                            .collect::<std::collections::HashSet<_>>()
+                            .into_iter()
+                            .collect();
+                    }
+                }
+            } else {
+                // No registry client, use existing dependencies
+                available_group_ids = existing_dependencies
+                    .iter()
+                    .map(|d| d.group_id.clone())
+                    .collect::<std::collections::HashSet<_>>()
+                    .into_iter()
+                    .collect();
             }
 
-            self.group_id = Some(Input::new().with_prompt("Group ID").interact_text()?);
+            if !available_group_ids.is_empty() {
+                // Show available group IDs and allow selection or custom input
+                let mut options = available_group_ids.clone();
+                options.push("📝 Enter custom group ID".to_string());
+
+                let selection = Select::new()
+                    .with_prompt("Group ID")
+                    .items(&options)
+                    .default(options.len() - 1) // Default to custom input
+                    .interact()?;
+
+                if selection == options.len() - 1 {
+                    // User chose to enter custom group ID
+                    self.group_id = Some(
+                        Input::new()
+                            .with_prompt("Enter custom group ID")
+                            .interact_text()?,
+                    );
+                } else {
+                    // User selected an available group ID
+                    self.group_id = Some(available_group_ids[selection].clone());
+                }
+            } else {
+                // No available group IDs, default to "default"
+                self.group_id = Some("default".to_string());
+                println!("ℹ️ No groups found, using default group: 'default'");
+            }
         }
 
         // Complete artifact_id
         if self.artifact_id.is_none() {
-            let existing_artifacts: Vec<String> = existing_dependencies
-                .iter()
-                .filter(|d| d.group_id == *self.group_id.as_ref().unwrap_or(&String::new()))
-                .map(|d| d.artifact_id.clone())
-                .collect::<std::collections::HashSet<_>>()
-                .into_iter()
-                .collect();
+            let available_artifacts: Vec<String>;
 
-            if !existing_artifacts.is_empty() {
-                println!(
-                    "Existing artifacts in this group: {}",
-                    existing_artifacts.join(", ")
-                );
+            // Try to fetch artifacts from the registry if available
+            if let Some(client) = registry_client {
+                if let Some(group_id) = &self.group_id {
+                    match client.list_artifacts(group_id).await {
+                        Ok(registry_artifacts) => {
+                            available_artifacts = registry_artifacts;
+                        }
+                        Err(_) => {
+                            // Fall back to existing dependencies if registry query fails
+                            available_artifacts = existing_dependencies
+                                .iter()
+                                .filter(|d| d.group_id == *group_id)
+                                .map(|d| d.artifact_id.clone())
+                                .collect::<std::collections::HashSet<_>>()
+                                .into_iter()
+                                .collect();
+                        }
+                    }
+                } else {
+                    available_artifacts = Vec::new();
+                }
+            } else {
+                // No registry client, use existing dependencies
+                available_artifacts = existing_dependencies
+                    .iter()
+                    .filter(|d| d.group_id == *self.group_id.as_ref().unwrap_or(&String::new()))
+                    .map(|d| d.artifact_id.clone())
+                    .collect::<std::collections::HashSet<_>>()
+                    .into_iter()
+                    .collect();
             }
 
-            self.artifact_id = Some(Input::new().with_prompt("Artifact ID").interact_text()?);
+            if !available_artifacts.is_empty() {
+                // Show available artifacts and allow selection or custom input
+                let mut options = available_artifacts.clone();
+                options.push("📝 Enter custom artifact ID".to_string());
+
+                let selection = Select::new()
+                    .with_prompt("Artifact ID")
+                    .items(&options)
+                    .default(options.len() - 1) // Default to custom input
+                    .interact()?;
+
+                if selection == options.len() - 1 {
+                    // User chose to enter custom artifact ID
+                    self.artifact_id = Some(
+                        Input::new()
+                            .with_prompt("Enter custom artifact ID")
+                            .interact_text()?,
+                    );
+                } else {
+                    // User selected an available artifact ID
+                    self.artifact_id = Some(available_artifacts[selection].clone());
+                }
+            } else {
+                // No available artifacts, just prompt for input
+                self.artifact_id = Some(Input::new().with_prompt("Artifact ID").interact_text()?);
+            }
         }
 
         // Complete version - we'll handle this separately after we have registry access
@@ -219,6 +307,18 @@ impl Identifier {
         }
 
         Ok(())
+    }
+
+    /// Validate that the artifact exists in the registry
+    pub async fn validate_artifact_exists(
+        &self,
+        registry_client: &crate::registry::RegistryClient,
+    ) -> Result<bool> {
+        if let (Some(group_id), Some(artifact_id)) = (&self.group_id, &self.artifact_id) {
+            registry_client.artifact_exists(group_id, artifact_id).await
+        } else {
+            Ok(false)
+        }
     }
 
     /// Find dependencies that match this identifier (for removal)
