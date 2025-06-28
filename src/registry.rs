@@ -37,7 +37,8 @@ fn suggest_version_bump(version: &str) -> String {
 pub struct ArtifactMetadata {
     pub artifact_id: String,
     pub artifact_type: String,
-    pub group_id: String,
+    #[serde(default, alias = "groupId", alias = "group")]
+    pub group_id: Option<String>,
 }
 
 pub struct RegistryClient {
@@ -209,7 +210,11 @@ impl RegistryClient {
         );
         let resp = self.client.get(&url).send().await?.error_for_status()?;
 
-        let metadata: ArtifactMetadata = resp.json().await?;
+        let mut metadata: ArtifactMetadata = resp.json().await?;
+        // Ensure group_id is set even if not provided by the API response
+        if metadata.group_id.is_none() {
+            metadata.group_id = Some(group_id.to_string());
+        }
         Ok(metadata)
     }
 

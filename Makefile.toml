@@ -25,24 +25,34 @@ args = ["install", "cargo-watch", "cargo-tarpaulin", "cargo-audit"]
 
 # Test tasks
 [tasks.test]
-description = "Run all tests"
+description = "Run all tests (unit + integration)"
 command = "cargo"
 args = ["test"]
 
 [tasks.test-unit]
 description = "Run unit tests only"
 command = "cargo"
-args = ["test"]
+args = ["test", "--lib"]
 
 [tasks.test-integration]
-description = "Run integration tests (requires running registry)"
+description = "Run all integration tests"
 command = "cargo"
-args = ["test", "lockfile_integration"]
+args = ["test", "--tests"]
 
 [tasks.test-watch]
 description = "Run tests in watch mode"
 command = "cargo"
 args = ["watch", "-x", "test"]
+
+[tasks.test-watch-unit]
+description = "Run unit tests in watch mode"
+command = "cargo"
+args = ["watch", "-x", "test --lib"]
+
+[tasks.test-watch-integration]
+description = "Run integration tests in watch mode"
+command = "cargo"
+args = ["watch", "-x", "test --tests"]
 
 [tasks.test-coverage]
 description = "Generate test coverage report"
@@ -78,6 +88,24 @@ args = ["audit"]
 [tasks.check]
 description = "Run all quality checks"
 dependencies = ["format-check", "lint", "test"]
+
+# Test workflow tasks
+[tasks.test-fast]
+description = "Run only fast tests (unit tests)"
+dependencies = ["test-unit"]
+
+[tasks.test-all]
+description = "Run all tests with detailed output"
+command = "cargo"
+args = ["test", "--", "--nocapture"]
+
+[tasks.test-ci]
+description = "Run tests suitable for CI (unit + integration)"
+dependencies = ["test-unit", "test-integration"]
+
+[tasks.dev-check]
+description = "Quick development check (format + lint + unit tests)"
+dependencies = ["format-check", "lint", "test-unit"]
 
 [tasks.fix]
 description = "Run all fixable quality tasks"

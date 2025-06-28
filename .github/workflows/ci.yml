@@ -57,7 +57,7 @@ jobs:
         run: cargo build --verbose
 
       - name: Run unit tests
-        run: cargo test --verbose
+        run: cargo test --lib --verbose
 
   integration-test:
     name: Integration Tests
@@ -110,8 +110,10 @@ jobs:
       - name: Build
         run: cargo build --verbose
 
-      - name: Run integration tests
-        run: cargo test lockfile_integration --verbose
+      - name: Run all integration tests
+        run: cargo test --tests --verbose
+        env:
+          REGISTRY_URL: http://localhost:8080
 
   security-audit:
     name: Security Audit

@@ -37,36 +37,9 @@
 //!
 //! Global registries can be configured in `~/.config/apicurio/registries.yaml`.
 
-mod commands;
-mod config;
-mod constants;
-mod dependency;
-mod identifier;
-mod lockfile;
-mod registry;
-
-#[cfg(test)]
-mod lockfile_integration_tests;
-
 use anyhow::Result;
+use apicurio_cli::{commands, Cli};
 use clap::Parser;
-
-/// CLI tool for managing schema artifacts from Apicurio Registry
-///
-/// The Apicurio CLI provides lockfile-based dependency management for schema artifacts
-/// including Protobuf, Avro, JSON Schema, OpenAPI, and more. It supports multiple
-/// registries, flexible authentication, and semantic version resolution.
-#[derive(Parser)]
-#[command(
-    name = "apicurio",
-    version,
-    about = "CLI tool for managing schema artifacts from Apicurio Registry",
-    long_about = "A powerful Rust-based command-line tool for managing schema artifacts from Apicurio Registry.\n\nFeatures lockfile-based dependency management, multi-registry support, flexible authentication,\nand semantic version resolution for Protobuf, Avro, JSON Schema, OpenAPI, and other schema types."
-)]
-struct Cli {
-    #[command(subcommand)]
-    cmd: Option<commands::Commands>,
-}
 
 /// Main entry point for the Apicurio CLI
 ///

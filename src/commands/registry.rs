@@ -1,6 +1,7 @@
 use crate::config::{load_global_config, save_global_config, AuthConfig, RegistryConfig};
 use anyhow::{anyhow, Result};
 use clap::Subcommand;
+use dialoguer::Select;
 use std::io::{stdin, stdout, Write};
 
 #[derive(Subcommand, Debug)]
@@ -45,9 +46,17 @@ pub async fn run(cmd: RegistryCommands) -> Result<()> {
                 return Err(anyhow!("registry '{}' already exists", name));
             }
             let url = prompt("Registry URL")?;
-            println!("Auth types: none, basic, token, bearer");
-            let auth_type = prompt("Auth type")?;
-            let auth = match auth_type.as_str() {
+
+            // Use select menu for auth types
+            let auth_options = vec!["none", "basic", "token", "bearer"];
+            let selection = Select::new()
+                .with_prompt("Auth type")
+                .items(&auth_options)
+                .default(0)
+                .interact()?;
+
+            let auth_type = auth_options[selection];
+            let auth = match auth_type {
                 "none" => AuthConfig::None,
                 "basic" => {
                     let user = prompt("Username")?;
@@ -67,8 +76,13 @@ pub async fn run(cmd: RegistryCommands) -> Result<()> {
                 }
                 other => return Err(anyhow!("unknown auth type '{}'", other)),
             };
-            global.registries.push(RegistryConfig { name, url, auth });
+            global.registries.push(RegistryConfig {
+                name: name.clone(),
+                url,
+                auth,
+            });
             save_global_config(&global)?;
+            println!("✅ Added registry '{name}' successfully");
         }
         RegistryCommands::Remove { name } => {
             let before = global.registries.len();
