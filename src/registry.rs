@@ -52,23 +52,37 @@ impl RegistryClient {
     /// List all published versions for a given artifact
     pub async fn list_versions(&self, group_id: &str, artifact_id: &str) -> Result<Vec<Version>> {
         let url = format!(
-            "{}/apis/registry/v2/groups/{}/artifacts/{}/versions",
+            "{}/apis/registry/v3/groups/{}/artifacts/{}/versions",
             self.base_url, group_id, artifact_id
         );
         let resp = self.client.get(&url).send().await?.error_for_status()?;
         #[derive(Deserialize)]
-        struct Versions {
-            versions: Vec<String>,
+        struct ApiResponse {
+            #[allow(dead_code)]
+            count: usize,
+            versions: Vec<ApiVersion>,
         }
-        let vr: Versions = resp.json().await?;
-        // parse to semver
-        let mut out = Vec::new();
-        for v in vr.versions {
-            if let Ok(parsed) = Version::parse(&v) {
-                out.push(parsed);
+
+        #[derive(Deserialize)]
+        struct ApiVersion {
+            version: String,
+        }
+
+        let api_response: ApiResponse = resp.json().await?;
+        let mut semver_versions = Vec::new();
+        for v in api_response.versions {
+            if let Ok(parsed) = Version::parse(&v.version) {
+                semver_versions.push(parsed);
             }
         }
-        Ok(out)
+        Ok(semver_versions)
+    }
+
+    pub fn get_download_url(&self, group_id: &str, artifact_id: &str, version: &Version) -> String {
+        format!(
+            "{}/apis/registry/v3/groups/{}/artifacts/{}/versions/{}/content",
+            self.base_url, group_id, artifact_id, version
+        )
     }
 
     /// Download the raw content for a specific version
@@ -78,10 +92,7 @@ impl RegistryClient {
         artifact_id: &str,
         version: &Version,
     ) -> Result<bytes::Bytes> {
-        let url = format!(
-            "{}/apis/registry/v2/groups/{}/artifacts/{}/versions/{}/content",
-            self.base_url, group_id, artifact_id, version
-        );
+        let url = self.get_download_url(group_id, artifact_id, version);
         let resp = self.client.get(&url).send().await?.error_for_status()?;
         Ok(resp.bytes().await?)
     }

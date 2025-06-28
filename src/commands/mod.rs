@@ -6,6 +6,7 @@ pub mod completions;
 pub mod doctor;
 pub mod init;
 pub mod list;
+pub mod lock;
 pub mod pull;
 pub mod push;
 pub mod registry;
@@ -53,6 +54,8 @@ pub enum Commands {
     Completions { shell: String },
     #[command(about = "Publish to registries")]
     Push,
+    #[command(about = "Update the lockfile based on current dependencies")]
+    Lock,
 }
 
 pub async fn run(cmd: Commands) -> Result<()> {
@@ -69,5 +72,6 @@ pub async fn run(cmd: Commands) -> Result<()> {
         Commands::Doctor => doctor::run().await,
         Commands::Completions { shell } => completions::run(shell),
         Commands::Push => push::run().await,
+        Commands::Lock => lock::run().await,
     }
 }
