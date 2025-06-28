@@ -12,23 +12,31 @@ pub async fn run() -> Result<()> {
     let regs = repo_cfg.merge_registries(global_cfg)?;
 
     println!("Registries:");
-    for r in regs {
-        println!(" - {} → {}", r.name, r.url);
+    if regs.is_empty() {
+        println!(" - No registries found.");
+    } else {
+        for r in regs {
+            println!(" - {} → {}", r.name, r.url);
+        }
     }
 
     let lock = LockFile::load(&PathBuf::from(APICURIO_LOCK)).ok();
     println!("\nDependencies:");
-    for dep in repo_cfg.dependencies {
-        if let Some(lf) = &lock {
-            if let Some(ld) = lf.locked_dependencies.iter().find(|d| d.name == dep.name) {
-                println!(
-                    " - {}: spec={} locked={}",
-                    dep.name, dep.version, ld.resolved_version
-                );
-                continue;
+    if repo_cfg.dependencies.is_empty() {
+        println!(" - No dependencies found.");
+    } else {
+        for dep in repo_cfg.dependencies {
+            if let Some(lf) = &lock {
+                if let Some(ld) = lf.locked_dependencies.iter().find(|d| d.name == dep.name) {
+                    println!(
+                        " - {}: spec={} locked={}",
+                        dep.name, dep.version, ld.resolved_version
+                    );
+                    continue;
+                }
             }
+            println!(" - {}: spec={}", dep.name, dep.version);
         }
-        println!(" - {}: spec={}", dep.name, dep.version);
     }
 
     Ok(())

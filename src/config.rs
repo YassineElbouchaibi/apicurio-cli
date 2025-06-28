@@ -91,7 +91,6 @@ impl Default for AuthConfig {
 
 pub fn load_repo_config(path: &PathBuf) -> anyhow::Result<RepoConfig> {
     let preprocessed_data = preprocess_config(path)?; // Preprocess the YAML file to expand environment variables
-    println!("Preprocessed config data:\n{}", preprocessed_data);
     let cfg: RepoConfig = serde_yaml::from_str(&preprocessed_data)?;
     Ok(cfg)
 }
