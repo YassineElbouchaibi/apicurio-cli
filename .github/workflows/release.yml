@@ -5,6 +5,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -13,27 +16,23 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ steps.get_version.outputs.VERSION }}
     steps:
+      - uses: actions/checkout@v4
+
       - name: Get version from tag
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release v${{ steps.get_version.outputs.VERSION }}
-          draft: false
-          prerelease: false
-          body: |
-            Release v${{ steps.get_version.outputs.VERSION }}
+        run: |
+          gh release create ${{ github.ref_name }} \
+            --title "Release v${{ steps.get_version.outputs.VERSION }}" \
+            --notes "Release v${{ steps.get_version.outputs.VERSION }}
 
-            See [CHANGELOG.md](https://github.com/YassineElbouchaibi/apicurio-cli/blob/main/CHANGELOG.md) for details.
+          See [CHANGELOG.md](https://github.com/YassineElbouchaibi/apicurio-cli/blob/main/CHANGELOG.md) for details."
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   build:
     name: Build Release Binaries
@@ -104,14 +103,10 @@ jobs:
           cd -
 
       - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
+        run: |
+          gh release upload ${{ github.ref_name }} ./${{ matrix.archive_name }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./${{ matrix.archive_name }}
-          asset_name: ${{ matrix.archive_name }}
-          asset_content_type: application/octet-stream
+          GH_TOKEN: ${{ github.token }}
 
   publish-crate:
     name: Publish to crates.io
