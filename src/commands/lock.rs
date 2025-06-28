@@ -29,7 +29,7 @@ pub async fn run() -> Result<()> {
 
     // 2) Check if existing lock is up-to-date with enhanced validation
     let lock_path = PathBuf::from(APICURIO_LOCK);
-    if let Ok(existing_lock) = LockFile::load(&lock_path) {
+    let existing_lock = if let Ok(existing_lock) = LockFile::load(&lock_path) {
         // First, quick check: is config hash the same?
         if existing_lock.is_compatible_with_config(&config_hash) {
             // Second, check modification time if available
@@ -50,7 +50,10 @@ pub async fn run() -> Result<()> {
         } else {
             println!("🔓 Lock file outdated: config hash changed");
         }
-    }
+        Some(existing_lock)
+    } else {
+        None
+    };
 
     // 3) for each declared dependency, resolve & hash
     let mut new_locks = Vec::with_capacity(repo_cfg.dependencies.len());
@@ -107,6 +110,12 @@ pub async fn run() -> Result<()> {
     // 4) Create new lockfile with metadata including config modification time
     let config_modified = LockFile::get_config_modification_time(&config_path).ok();
     let lf = LockFile::with_config_modified(new_locks, config_hash, config_modified);
+
+    // 5) Clean up old output paths if they changed
+    if let Some(ref old_lock) = existing_lock {
+        cleanup_changed_output_paths(&old_lock.locked_dependencies, &lf.locked_dependencies)?;
+    }
+
     lf.save(&lock_path)
         .with_context(|| format!("writing {}", lock_path.display()))?;
     println!("🔒 Updated {}", lock_path.display());
@@ -175,6 +184,109 @@ async fn verify_lock_is_still_valid(
     Ok(true)
 }
 
+/// Clean up old output files when their paths change during locking
+fn cleanup_changed_output_paths(
+    old_dependencies: &[LockedDependency],
+    new_dependencies: &[LockedDependency],
+) -> Result<()> {
+    use std::collections::HashMap;
+
+    // Create a map of dependency name to output path for old and new dependencies
+    let old_paths: HashMap<&str, &str> = old_dependencies
+        .iter()
+        .map(|dep| (dep.name.as_str(), dep.output_path.as_str()))
+        .collect();
+
+    let new_paths: HashMap<&str, &str> = new_dependencies
+        .iter()
+        .map(|dep| (dep.name.as_str(), dep.output_path.as_str()))
+        .collect();
+
+    // Check for dependencies with changed output paths
+    for (dep_name, old_path) in &old_paths {
+        if let Some(new_path) = new_paths.get(dep_name) {
+            // If the dependency still exists but the output path changed
+            if old_path != new_path {
+                let old_file = PathBuf::from(old_path);
+                if old_file.exists() {
+                    match std::fs::remove_file(&old_file) {
+                        Ok(()) => {
+                            println!("🗑️  Removed old output file: {}", old_path);
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "Warning: Failed to remove old output file '{}': {}",
+                                old_path, e
+                            );
+                        }
+                    }
+
+                    // Also try to remove empty parent directories
+                    if let Some(parent) = old_file.parent() {
+                        let _ = remove_empty_parent_dirs(parent);
+                    }
+                }
+            }
+        } else {
+            // Dependency was removed entirely - clean up its output file
+            let old_file = PathBuf::from(old_path);
+            if old_file.exists() {
+                match std::fs::remove_file(&old_file) {
+                    Ok(()) => {
+                        println!(
+                            "🗑️  Removed output file for removed dependency '{}': {}",
+                            dep_name, old_path
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "Warning: Failed to remove output file for removed dependency '{}': {}",
+                            dep_name, e
+                        );
+                    }
+                }
+
+                // Also try to remove empty parent directories
+                if let Some(parent) = old_file.parent() {
+                    let _ = remove_empty_parent_dirs(parent);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Recursively remove empty parent directories up to the current working directory
+fn remove_empty_parent_dirs(dir: &std::path::Path) -> Result<()> {
+    // Don't try to remove the current working directory or root
+    let cwd = std::env::current_dir().unwrap_or_default();
+    if dir == cwd || dir.parent().is_none() {
+        return Ok(());
+    }
+
+    // Only remove if the directory is empty
+    if let Ok(mut entries) = std::fs::read_dir(dir) {
+        if entries.next().is_none() {
+            // Directory is empty, try to remove it
+            match std::fs::remove_dir(dir) {
+                Ok(()) => {
+                    println!("🗑️  Removed empty directory: {}", dir.display());
+                    // Recursively try to remove parent directories
+                    if let Some(parent) = dir.parent() {
+                        let _ = remove_empty_parent_dirs(parent);
+                    }
+                }
+                Err(_) => {
+                    // Ignore errors when removing directories (might not have permissions, etc.)
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,6 +322,141 @@ mod tests {
         );
     }
 
-    // Note: Full integration tests would require mocking the RegistryClient
-    // which is beyond the scope of this improvement but could be added later
+    #[test]
+    fn test_cleanup_changed_output_paths() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        // Create a temporary directory for testing
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create old and new file paths
+        let old_path = temp_path.join("old").join("types.proto");
+        let new_path = temp_path.join("new").join("types.proto");
+
+        // Create the old file and its parent directory
+        fs::create_dir_all(old_path.parent().unwrap()).unwrap();
+        fs::write(&old_path, "old content").unwrap();
+
+        // Create old and new dependencies with different output paths
+        let old_deps = vec![LockedDependency {
+            name: "test_dep".to_string(),
+            registry: "local".to_string(),
+            resolved_version: "1.0.0".to_string(),
+            download_url: "http://localhost/test".to_string(),
+            sha256: "test_hash".to_string(),
+            output_path: old_path.to_string_lossy().to_string(),
+            group_id: "com.example".to_string(),
+            artifact_id: "test".to_string(),
+            version_spec: "^1.0".to_string(),
+        }];
+
+        let new_deps = vec![LockedDependency {
+            name: "test_dep".to_string(),
+            registry: "local".to_string(),
+            resolved_version: "1.0.0".to_string(),
+            download_url: "http://localhost/test".to_string(),
+            sha256: "test_hash".to_string(),
+            output_path: new_path.to_string_lossy().to_string(),
+            group_id: "com.example".to_string(),
+            artifact_id: "test".to_string(),
+            version_spec: "^1.0".to_string(),
+        }];
+
+        // Verify old file exists before cleanup
+        assert!(old_path.exists());
+
+        // Run cleanup
+        cleanup_changed_output_paths(&old_deps, &new_deps).unwrap();
+
+        // Verify old file was removed
+        assert!(!old_path.exists());
+
+        // Verify old directory was also removed since it's empty
+        assert!(!old_path.parent().unwrap().exists());
+    }
+
+    #[test]
+    fn test_cleanup_removed_dependency() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        // Create a temporary directory for testing
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create old file path
+        let old_path = temp_path.join("removed").join("types.proto");
+
+        // Create the old file and its parent directory
+        fs::create_dir_all(old_path.parent().unwrap()).unwrap();
+        fs::write(&old_path, "old content").unwrap();
+
+        // Create old dependency that will be removed
+        let old_deps = vec![LockedDependency {
+            name: "removed_dep".to_string(),
+            registry: "local".to_string(),
+            resolved_version: "1.0.0".to_string(),
+            download_url: "http://localhost/test".to_string(),
+            sha256: "test_hash".to_string(),
+            output_path: old_path.to_string_lossy().to_string(),
+            group_id: "com.example".to_string(),
+            artifact_id: "test".to_string(),
+            version_spec: "^1.0".to_string(),
+        }];
+
+        let new_deps = vec![]; // Empty - dependency removed
+
+        // Verify old file exists before cleanup
+        assert!(old_path.exists());
+
+        // Run cleanup
+        cleanup_changed_output_paths(&old_deps, &new_deps).unwrap();
+
+        // Verify old file was removed
+        assert!(!old_path.exists());
+
+        // Verify old directory was also removed since it's empty
+        assert!(!old_path.parent().unwrap().exists());
+    }
+
+    #[test]
+    fn test_cleanup_unchanged_output_paths() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        // Create a temporary directory for testing
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create file path that won't change
+        let file_path = temp_path.join("unchanged").join("types.proto");
+
+        // Create the file and its parent directory
+        fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+        fs::write(&file_path, "content").unwrap();
+
+        // Create dependencies with same output path
+        let deps = vec![LockedDependency {
+            name: "unchanged_dep".to_string(),
+            registry: "local".to_string(),
+            resolved_version: "1.0.0".to_string(),
+            download_url: "http://localhost/test".to_string(),
+            sha256: "test_hash".to_string(),
+            output_path: file_path.to_string_lossy().to_string(),
+            group_id: "com.example".to_string(),
+            artifact_id: "test".to_string(),
+            version_spec: "^1.0".to_string(),
+        }];
+
+        // Verify file exists before cleanup
+        assert!(file_path.exists());
+
+        // Run cleanup with same old and new deps
+        cleanup_changed_output_paths(&deps, &deps).unwrap();
+
+        // Verify file still exists (unchanged)
+        assert!(file_path.exists());
+    }
 }
