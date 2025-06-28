@@ -4,7 +4,7 @@ command = "docker-compose"
 args = ["-f", "docker-compose.dev.yml", "up", "-d"]
 
 [tasks.populate-protos]
-description = "Wait for Apicurio and populate simple .proto artifacts"
+description = "Wait for Apicurio and populate simple .proto artifacts (multiple versions)"
 script = '''
 #!/bin/sh
 
@@ -47,50 +47,51 @@ upload_artifact() {
   REFERENCES_JSON="$6"
   CONTENT_PROTO="$7"
 
-  # JSON-escape the proto content via Python
   ESCAPED_CONTENT=$(printf '%s' "$CONTENT_PROTO" \
     | python3 -c "import json,sys; sys.stdout.write(json.dumps(sys.stdin.read())[1:-1])")
 
-  # Write the JSON payload (with indentation) directly to the dump file:
   DUMP_FILE="/tmp/${ARTIFACT_ID//./_}_${VERSION}.json"
   cat > "$DUMP_FILE" <<EOF
-  {
-    "artifactId": "${ARTIFACT_ID}",
-    "artifactType": "PROTOBUF",
-    "name": "${NAME}",
-    "description": "${DESCRIPTION}",
-    "labels": ${LABELS_JSON},
-    "firstVersion": {
-      "version": "${VERSION}",
-      "content": {
-        "content": "${ESCAPED_CONTENT}",
-        "contentType": "application/x-protobuf",
-        "references": ${REFERENCES_JSON}
-      },
-      "name": "${NAME}",
-      "description": "${DESCRIPTION}",
-      "labels": {}
-    }
+{
+  "artifactId": "$ARTIFACT_ID",
+  "artifactType": "PROTOBUF",
+  "name": "$NAME",
+  "description": "$DESCRIPTION",
+  "labels": $LABELS_JSON,
+  "firstVersion": {
+    "version": "$VERSION",
+    "content": {
+      "content": "$ESCAPED_CONTENT",
+      "contentType": "application/x-protobuf",
+      "references": $REFERENCES_JSON
+    },
+    "name": "$NAME",
+    "description": "$DESCRIPTION",
+    "labels": {}
   }
+}
 EOF
 
-  echo "Uploading ${ARTIFACT_ID}@${VERSION}..."
+  echo "Uploading $ARTIFACT_ID@$VERSION..."
   HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
     -X POST -H "Content-Type: application/json" \
     --data @"$DUMP_FILE" \
-    "$REGISTRY_URL/groups/$GROUP/artifacts")
+    "$REGISTRY_URL/groups/$GROUP/artifacts?ifExists=CREATE_VERSION")
 
   if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
-    echo "✅ Uploaded ${ARTIFACT_ID}@${VERSION}"
+    echo "✅ Uploaded $ARTIFACT_ID@$VERSION"
   else
-    echo "❌ Failed to upload ${ARTIFACT_ID}@${VERSION} (HTTP $HTTP_STATUS)"
+    echo "❌ Failed to upload $ARTIFACT_ID@$VERSION (HTTP $HTTP_STATUS)"
   fi
 
   rm -f "$DUMP_FILE"
 }
 
-# === types.proto === (no references)
-TYPES_PROTO=$(cat <<'EOP'
+# === versions to publish ===
+VERSIONS=("1.0.0" "1.0.1" "1.1.0" "1.1.1" "1.2.1" "2.1.1")
+
+# === text_message.proto === (no references) ===
+TEXT_MESSAGE_PROTO=$(cat <<'EOP'
 syntax = "proto3";
 
 package com.example.v1;
@@ -100,46 +101,69 @@ message TextMessage {
 }
 EOP
 )
-upload_artifact "com.example.v1.TextMessage" "1.0.0" "TextMessage" \
-  "Simple text message type" '{"type":"message","format":"text"}' '[]' "$TYPES_PROTO"
 
-# === ping.proto === (references TextMessage)
+for VERSION in "${VERSIONS[@]}"; do
+  upload_artifact \
+    "com.example.v1.TextMessage" \
+    "$VERSION" \
+    "TextMessage" \
+    "Simple text message type" \
+    '{"type":"message","format":"text"}' \
+    '[]' \
+    "$TEXT_MESSAGE_PROTO"
+done
+
+# === ping.proto === (references TextMessage) ===
 PING_PROTO=$(cat <<'EOP'
 syntax = "proto3";
 
 package com.example.v1;
 
-import "types.proto";
+import "text_message.proto";
 
 service PingService {
   rpc Ping(TextMessage) returns (TextMessage);
 }
 EOP
 )
-upload_artifact "com.example.v1.PingService" "1.0.0" "PingService" \
-  "Ping service that echoes text" '{"type":"service","protocol":"ping"}' \
-  '[{"groupId":"default","artifactId":"com.example.v1.TextMessage","version":"1.0.0","name":"types.proto"}]' \
-  "$PING_PROTO"
 
-# === echo.proto === (references TextMessage)
+for VERSION in "${VERSIONS[@]}"; do
+  upload_artifact \
+    "com.example.v1.PingService" \
+    "$VERSION" \
+    "PingService" \
+    "Ping service that echoes text" \
+    '{"type":"service","protocol":"ping"}' \
+    '[{"groupId":"default","artifactId":"com.example.v1.TextMessage","version":"'"$VERSION"'","name":"text_message.proto"}]' \
+    "$PING_PROTO"
+done
+
+# === echo.proto === (references TextMessage) ===
 ECHO_PROTO=$(cat <<'EOP'
 syntax = "proto3";
 
 package com.example.v1;
 
-import "types.proto";
+import "text_message.proto";
 
 service EchoService {
   rpc Echo(TextMessage) returns (TextMessage);
 }
 EOP
 )
-upload_artifact "com.example.v1.EchoService" "1.0.0" "EchoService" \
-  "Echo service that repeats text" '{"type":"service","protocol":"echo"}' \
-  '[{"groupId":"default","artifactId":"com.example.v1.TextMessage","version":"1.0.0","name":"types.proto"}]' \
-  "$ECHO_PROTO"
+
+for VERSION in "${VERSIONS[@]}"; do
+  upload_artifact \
+    "com.example.v1.EchoService" \
+    "$VERSION" \
+    "EchoService" \
+    "Echo service that repeats text" \
+    '{"type":"service","protocol":"echo"}' \
+    '[{"groupId":"default","artifactId":"com.example.v1.TextMessage","version":"'"$VERSION"'","name":"text_message.proto"}]' \
+    "$ECHO_PROTO"
+done
 '''
 
 [tasks.start-and-populate]
-description = "Start the docker environment and populate it with 3 protos"
+description = "Start the docker environment and populate it with 3 protos (multiple versions)"
 dependencies = ["start-docker-env", "populate-protos"]

@@ -141,14 +141,81 @@ impl Identifier {
             self.artifact_id = Some(Input::new().with_prompt("Artifact ID").interact_text()?);
         }
 
-        // Complete version
-        if self.version.is_none() {
-            self.version = Some(
-                Input::new()
-                    .with_prompt("Version (semver)")
-                    .default("1.0.0".to_string())
-                    .interact_text()?,
-            );
+        // Complete version - we'll handle this separately after we have registry access
+        // This will be completed later in the add command
+
+        Ok(())
+    }
+
+    /// Complete the version field by fetching available versions from the registry
+    pub async fn complete_version_with_registry(
+        &mut self,
+        registry_client: &crate::registry::RegistryClient,
+    ) -> Result<()> {
+        if self.version.is_some() {
+            return Ok(()); // Version already specified
+        }
+
+        let group_id = self
+            .group_id
+            .as_ref()
+            .ok_or_else(|| anyhow!("Group ID must be specified before completing version"))?;
+
+        let artifact_id = self
+            .artifact_id
+            .as_ref()
+            .ok_or_else(|| anyhow!("Artifact ID must be specified before completing version"))?;
+
+        // Fetch available versions from the registry
+        match registry_client.list_versions(group_id, artifact_id).await {
+            Ok(mut versions) => {
+                if versions.is_empty() {
+                    // No existing versions, prompt user with default
+                    self.version = Some(
+                        Input::new()
+                            .with_prompt("Version (semver)")
+                            .default("1.0.0".to_string())
+                            .interact_text()?,
+                    );
+                } else {
+                    // Sort versions in descending order to get the latest first
+                    versions.sort_by(|a, b| b.cmp(a));
+                    let version_strings: Vec<String> =
+                        versions.iter().map(|v| v.to_string()).collect();
+
+                    // Create options for the select menu
+                    let mut options = version_strings.clone();
+                    options.push("📝 Enter custom version".to_string());
+
+                    let selection = Select::new()
+                        .with_prompt(&format!("Select version for {}/{}", group_id, artifact_id))
+                        .items(&options)
+                        .default(0) // Default to latest version
+                        .interact()?;
+
+                    if selection == options.len() - 1 {
+                        // User chose to enter custom version
+                        self.version = Some(
+                            Input::new()
+                                .with_prompt("Enter custom version (semver)")
+                                .interact_text()?,
+                        );
+                    } else {
+                        // User selected an existing version
+                        self.version = Some(version_strings[selection].clone());
+                    }
+                }
+            }
+            Err(_) => {
+                // Registry query failed (artifact might not exist yet), use default
+                println!("ℹ️ Could not fetch existing versions (artifact may not exist yet)");
+                self.version = Some(
+                    Input::new()
+                        .with_prompt("Version (semver)")
+                        .default("1.0.0".to_string())
+                        .interact_text()?,
+                );
+            }
         }
 
         Ok(())
