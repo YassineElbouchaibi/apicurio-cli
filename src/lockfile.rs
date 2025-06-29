@@ -21,9 +21,182 @@
 //! - SHA256 checksums of downloaded content
 //! - Lockfile format version for compatibility
 
+use convert_case::{Case, Casing};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{fs, path::Path};
+
+/// Generate output path for a transitive dependency using the pattern
+pub fn generate_transitive_output_path(
+    pattern: &str,
+    group_id: &str,
+    artifact_id: &str,
+    version: &str,
+    artifact_type: &str,
+) -> String {
+    let ext = match artifact_type.to_lowercase().as_str() {
+        "protobuf" => "proto",
+        "avro" => "avsc",
+        "json" => "json",
+        "openapi" => "yaml",
+        "asyncapi" => "yaml",
+        "graphql" => "graphql",
+        "xml" => "xsd",
+        "wsdl" => "wsdl",
+        _ => "txt",
+    };
+
+    expand_output_pattern(pattern, group_id, artifact_id, version, ext)
+}
+
+/// Advanced pattern expansion with support for complex artifact ID transformations
+pub fn expand_output_pattern(
+    pattern: &str,
+    group_id: &str,
+    artifact_id: &str,
+    version: &str,
+    ext: &str,
+) -> String {
+    let mut result = pattern.to_string();
+
+    // Basic replacements
+    result = result.replace("{groupId}", group_id);
+    result = result.replace("{artifactId}", artifact_id);
+    result = result.replace("{version}", version);
+    result = result.replace("{ext}", ext);
+
+    // Advanced artifact ID transformations
+    // Split artifact ID by dots for path-like transformations
+    let artifact_parts: Vec<&str> = artifact_id.split('.').collect();
+
+    // Replace {artifactId.path} with dot-separated parts as path segments, excluding the last part
+    // e.g., "sp.frame.Frame" -> "sp/frame"
+    if result.contains("{artifactId.path}") {
+        let path_version = if artifact_parts.len() > 1 {
+            artifact_parts[..artifact_parts.len() - 1].join("/")
+        } else {
+            String::new() // If no dots, path is empty
+        };
+        result = result.replace("{artifactId.path}", &path_version);
+    }
+
+    // Replace {artifactId.fullPath} with all dot-separated parts as path segments
+    // e.g., "sp.frame.Frame" -> "sp/frame/Frame"
+    if result.contains("{artifactId.fullPath}") {
+        let full_path_version = artifact_parts.join("/");
+        result = result.replace("{artifactId.fullPath}", &full_path_version);
+    }
+
+    // Replace {artifactId.snake_case} with snake_case version
+    // e.g., "sp.frame.Frame" -> "sp_frame_frame"
+    if result.contains("{artifactId.snake_case}") {
+        let snake_case = artifact_id.replace('.', "_").to_lowercase();
+        result = result.replace("{artifactId.snake_case}", &snake_case);
+    }
+
+    // Replace {artifactId.kebab_case} with kebab-case version
+    // e.g., "sp.frame.Frame" -> "sp-frame-frame"
+    if result.contains("{artifactId.kebab_case}") {
+        let kebab_case = artifact_id.replace('.', "-").to_lowercase();
+        result = result.replace("{artifactId.kebab_case}", &kebab_case);
+    }
+
+    // Replace {artifactId.lowercase} with lowercase version
+    if result.contains("{artifactId.lowercase}") {
+        result = result.replace("{artifactId.lowercase}", &artifact_id.to_lowercase());
+    }
+
+    // Replace {artifactId.last} with the last part after final dot
+    // e.g., "sp.frame.Frame" -> "Frame"
+    if result.contains("{artifactId.last}") {
+        let last_part = artifact_parts.last().unwrap_or(&artifact_id);
+        result = result.replace("{artifactId.last}", last_part);
+    }
+
+    // Replace {artifactId.lastLowercase} with the last part in lowercase
+    if result.contains("{artifactId.lastLowercase}") {
+        let last_part = artifact_parts.last().unwrap_or(&artifact_id).to_lowercase();
+        result = result.replace("{artifactId.lastLowercase}", &last_part);
+    }
+
+    // Replace {artifactId.lastSnakeCase} with the last part converted to snake_case
+    if result.contains("{artifactId.lastSnakeCase}") {
+        let last_part = artifact_parts.last().unwrap_or(&artifact_id);
+        let snake_case_part = last_part.to_case(Case::Snake);
+        result = result.replace("{artifactId.lastSnakeCase}", &snake_case_part);
+    }
+
+    // Replace indexed artifact parts {artifactParts[0]}, {artifactParts[1]}, etc.
+    for (i, part) in artifact_parts.iter().enumerate() {
+        let placeholder = format!("{{artifactParts[{i}]}}");
+        result = result.replace(&placeholder, part);
+    }
+
+    result
+}
+
+/// Check output overrides and mappings to determine the final output path
+/// Returns None if the artifact should be skipped (mapped to null)
+pub fn resolve_output_path(
+    base_pattern: &str,
+    output_overrides: &std::collections::HashMap<String, Option<String>>,
+    registry: &str,
+    group_id: &str,
+    artifact_id: &str,
+    version: &str,
+    artifact_type: &str,
+) -> Option<String> {
+    // Check for exact matches in order of specificity:
+    // 1. registry:groupId/artifactId
+    // 2. groupId/artifactId
+
+    let registry_key = format!("{registry}:{group_id}/{artifact_id}");
+    let group_key = format!("{group_id}/{artifact_id}");
+
+    if let Some(override_pattern) = output_overrides.get(&registry_key) {
+        override_pattern.as_ref().map(|pattern| {
+            expand_output_pattern(
+                pattern,
+                group_id,
+                artifact_id,
+                version,
+                &get_extension_for_type(artifact_type),
+            )
+        })
+    } else if let Some(override_pattern) = output_overrides.get(&group_key) {
+        override_pattern.as_ref().map(|pattern| {
+            expand_output_pattern(
+                pattern,
+                group_id,
+                artifact_id,
+                version,
+                &get_extension_for_type(artifact_type),
+            )
+        })
+    } else {
+        Some(generate_transitive_output_path(
+            base_pattern,
+            group_id,
+            artifact_id,
+            version,
+            artifact_type,
+        ))
+    }
+}
+
+fn get_extension_for_type(artifact_type: &str) -> String {
+    match artifact_type.to_lowercase().as_str() {
+        "protobuf" => "proto".to_string(),
+        "avro" => "avsc".to_string(),
+        "json" => "json".to_string(),
+        "openapi" => "yaml".to_string(),
+        "asyncapi" => "yaml".to_string(),
+        "graphql" => "graphql".to_string(),
+        "xml" => "xsd".to_string(),
+        "wsdl" => "wsdl".to_string(),
+        _ => "txt".to_string(),
+    }
+}
 
 /// A locked dependency with exact version and integrity information
 ///
@@ -50,6 +223,9 @@ pub struct LockedDependency {
     pub artifact_id: String,
     /// Original version specification from config (e.g., "^1.0.0")
     pub version_spec: String,
+    /// Whether this dependency was resolved transitively from references
+    #[serde(default)]
+    pub is_transitive: bool,
 }
 
 /// Lock file containing all resolved dependencies and metadata
@@ -321,6 +497,7 @@ dependencies:{deps}"#
             group_id: group_id.to_string(),
             artifact_id: artifact_id.to_string(),
             version_spec: version_spec.to_string(),
+            is_transitive: false,
         }
     }
 
@@ -361,6 +538,7 @@ dependencies:{deps}"#
             version: "1.0.0".to_string(),
             registry: "registry1".to_string(),
             output_path: "./protos".to_string(),
+            resolve_references: None,
         }];
 
         let deps3 = vec![DependencyConfig {
@@ -370,6 +548,7 @@ dependencies:{deps}"#
             version: "1.1.0".to_string(),
             registry: "registry1".to_string(),
             output_path: "./protos".to_string(),
+            resolve_references: None,
         }];
 
         let hash1 = LockFile::compute_config_hash(&config1, &deps1);
@@ -547,6 +726,7 @@ dependencies:{deps}"#
                 version: "1.0.0".to_string(),
                 registry: "registry1".to_string(),
                 output_path: "./protos".to_string(),
+                resolve_references: None,
             },
             crate::config::DependencyConfig {
                 name: "dep_b".to_string(),
@@ -555,6 +735,7 @@ dependencies:{deps}"#
                 version: "2.0.0".to_string(),
                 registry: "registry1".to_string(),
                 output_path: "./protos".to_string(),
+                resolve_references: None,
             },
         ];
 
@@ -577,6 +758,7 @@ dependencies:{deps}"#
             version: "1.0.0".to_string(),
             registry: "registry1".to_string(),
             output_path: "./protos".to_string(),
+            resolve_references: None,
         }];
 
         // These configs have different formatting but same semantic content
@@ -744,5 +926,134 @@ lockedDependencies:
             "^3.0",
         );
         assert!(!lockfile.dependencies_match(&[dep1_v1.clone(), dep2.clone(), dep3]));
+    }
+}
+
+#[cfg(test)]
+mod pattern_tests {
+    use super::*;
+
+    #[test]
+    fn test_artifact_id_path_transformations() {
+        // Test artifactId.path (excludes last part)
+        let result = expand_output_pattern(
+            "protos/{artifactId.path}/{artifactId.lastLowercase}.{ext}",
+            "nprod",
+            "sp.frame.Frame",
+            "4.3.1",
+            "proto",
+        );
+        assert_eq!(result, "protos/sp/frame/frame.proto");
+
+        // Test artifactId.fullPath (includes last part)
+        let result = expand_output_pattern(
+            "schemas/{artifactId.fullPath}.{ext}",
+            "nprod",
+            "sp.frame.Frame",
+            "4.3.1",
+            "avsc",
+        );
+        assert_eq!(result, "schemas/sp/frame/Frame.avsc");
+
+        // Test single part artifact ID
+        let result = expand_output_pattern(
+            "protos/{artifactId.path}/{artifactId.lastLowercase}.{ext}",
+            "default",
+            "SimpleMessage",
+            "1.0.0",
+            "proto",
+        );
+        assert_eq!(result, "protos//simplemessage.proto"); // Empty path when no dots
+
+        // Test empty artifact ID edge case
+        let result = expand_output_pattern(
+            "protos/{artifactId.path}/{artifactId.lastLowercase}.{ext}",
+            "default",
+            "",
+            "1.0.0",
+            "proto",
+        );
+        assert_eq!(result, "protos//.proto");
+
+        // Test artifactId.lastSnakeCase conversion
+        let result = expand_output_pattern(
+            "protos/{artifactId.path}/{artifactId.lastSnakeCase}.{ext}",
+            "default",
+            "sp.frame.PingService",
+            "1.0.0",
+            "proto",
+        );
+        assert_eq!(result, "protos/sp/frame/ping_service.proto");
+
+        // Test snake_case with already snake_case name
+        let result = expand_output_pattern(
+            "protos/{artifactId.lastSnakeCase}.{ext}",
+            "default",
+            "already_snake_case",
+            "1.0.0",
+            "proto",
+        );
+        assert_eq!(result, "protos/already_snake_case.proto");
+
+        // Test snake_case with mixed case
+        let result = expand_output_pattern(
+            "protos/{artifactId.lastSnakeCase}.{ext}",
+            "default",
+            "com.example.XMLHttpRequest",
+            "1.0.0",
+            "proto",
+        );
+        assert_eq!(result, "protos/xml_http_request.proto");
+    }
+
+    #[test]
+    fn test_resolve_output_path_with_null_override() {
+        use std::collections::HashMap;
+
+        let mut overrides = HashMap::new();
+        overrides.insert(
+            "nprod/sp.frame.Frame".to_string(),
+            Some("protos/sp/frame/frame.{ext}".to_string()),
+        );
+        overrides.insert("nprod/sp.internal.Debug".to_string(), None); // Skip this one
+
+        // Should return mapped path
+        let result = resolve_output_path(
+            "references/{groupId}/{artifactId}.{ext}",
+            &overrides,
+            "nprod-apicurio",
+            "nprod",
+            "sp.frame.Frame",
+            "4.3.1",
+            "PROTOBUF",
+        );
+        assert_eq!(result, Some("protos/sp/frame/frame.proto".to_string()));
+
+        // Should return None for null override
+        let result = resolve_output_path(
+            "references/{groupId}/{artifactId}.{ext}",
+            &overrides,
+            "nprod-apicurio",
+            "nprod",
+            "sp.internal.Debug",
+            "1.0.0",
+            "PROTOBUF",
+        );
+        assert_eq!(result, None);
+
+        // Should use default pattern when no override
+        let result = resolve_output_path(
+            "references/{groupId}/{artifactId}.{ext}",
+            &overrides,
+            "nprod-apicurio",
+            "nprod",
+            "sp.other.Service",
+            "2.0.0",
+            "PROTOBUF",
+        );
+        assert_eq!(
+            result,
+            Some("references/nprod/sp.other.Service.proto".to_string())
+        );
     }
 }

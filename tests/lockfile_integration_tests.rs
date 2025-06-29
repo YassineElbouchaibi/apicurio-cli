@@ -40,6 +40,7 @@ dependencies:
         version: "^1.0.0".to_string(),
         registry: "default".to_string(),
         output_path: "./protos/service1.proto".to_string(),
+        resolve_references: None,
     }];
 
     // Create lockfile
@@ -56,6 +57,7 @@ dependencies:
         group_id: "com.example".to_string(),
         artifact_id: "service1".to_string(),
         version_spec: "^1.0.0".to_string(),
+        is_transitive: false,
     };
 
     let lockfile = lockfile::LockFile::with_config_modified(
@@ -95,6 +97,7 @@ dependencies:
         version: "^1.1.0".to_string(), // Changed version
         registry: "default".to_string(),
         output_path: "./protos/service1.proto".to_string(),
+        resolve_references: None,
     }];
 
     let new_config_hash = lockfile::LockFile::compute_config_hash(modified_config, &modified_deps);
@@ -116,6 +119,7 @@ fn test_formatting_changes_dont_trigger_regeneration() {
         version: "^1.0.0".to_string(),
         registry: "default".to_string(),
         output_path: "./protos/service1.proto".to_string(),
+        resolve_references: None,
     }];
 
     // Original config
@@ -164,6 +168,7 @@ fn test_registry_changes_trigger_regeneration() {
         version: "^1.0.0".to_string(),
         registry: "default".to_string(),
         output_path: "./protos".to_string(),
+        resolve_references: None,
     }];
 
     // Config with one registry
@@ -211,6 +216,7 @@ fn test_external_registry_file_changes_trigger_regeneration() {
         version: "^1.0.0".to_string(),
         registry: "default".to_string(),
         output_path: "./protos".to_string(),
+        resolve_references: None,
     }];
 
     // Config without external registries file

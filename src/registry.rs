@@ -51,6 +51,46 @@ pub struct SystemInfo {
     pub built_on: String,
 }
 
+#[allow(dead_code)]
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactVersionMetadata {
+    pub version: String,
+    pub artifact_type: String,
+    pub global_id: Option<i64>,
+    pub content_id: Option<i64>,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub owner: Option<String>,
+    pub created_on: Option<String>,
+    pub labels: Option<std::collections::HashMap<String, String>>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ReferenceType {
+    Outbound,
+    Inbound,
+}
+
+impl ReferenceType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ReferenceType::Outbound => "OUTBOUND",
+            ReferenceType::Inbound => "INBOUND",
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactVersionReference {
+    pub group_id: Option<String>,
+    pub artifact_id: String,
+    pub version: String,
+    pub name: Option<String>,
+}
+
 pub struct RegistryClient {
     #[allow(dead_code)]
     pub name: String,
@@ -441,5 +481,46 @@ impl RegistryClient {
         let resp = self.client.get(&url).send().await?.error_for_status()?;
         let system_info: SystemInfo = resp.json().await?;
         Ok(system_info)
+    }
+
+    /// Get version metadata including references
+    pub async fn get_version_metadata(
+        &self,
+        group_id: &str,
+        artifact_id: &str,
+        version: &semver::Version,
+    ) -> Result<ArtifactVersionMetadata> {
+        let url = format!(
+            "{}/apis/registry/v3/groups/{}/artifacts/{}/versions/{}",
+            self.base_url, group_id, artifact_id, version
+        );
+        let resp = self.client.get(&url).send().await?.error_for_status()?;
+        let metadata: ArtifactVersionMetadata = resp.json().await?;
+        Ok(metadata)
+    }
+
+    /// Get artifact version references (outbound by default)
+    pub async fn get_version_references(
+        &self,
+        group_id: &str,
+        artifact_id: &str,
+        version: &semver::Version,
+        ref_type: Option<ReferenceType>,
+    ) -> Result<Vec<ArtifactVersionReference>> {
+        let url = format!(
+            "{}/apis/registry/v3/groups/{}/artifacts/{}/versions/{}/references",
+            self.base_url, group_id, artifact_id, version
+        );
+
+        let mut request = self.client.get(&url);
+        // Only add refType query parameter if explicitly specified
+        // The API defaults to OUTBOUND when not provided
+        if let Some(ref_type) = ref_type {
+            request = request.query(&[("refType", ref_type.as_str())]);
+        }
+
+        let resp = request.send().await?.error_for_status()?;
+        let references: Vec<ArtifactVersionReference> = resp.json().await?;
+        Ok(references)
     }
 }

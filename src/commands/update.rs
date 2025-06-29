@@ -58,6 +58,7 @@ pub async fn run() -> Result<()> {
             group_id: dep.group_id.clone(),
             artifact_id: dep.artifact_id.clone(),
             version_spec: dep_cfg.version.clone(),
+            is_transitive: false,
         });
     }
 

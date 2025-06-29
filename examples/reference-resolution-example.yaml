@@ -1,0 +1,71 @@
+# Example configuration demonstrating advanced reference resolution features
+
+# Configure reference resolution with flexible output path mappings
+referenceResolution:
+  enabled: true  # Global setting - can be overridden per dependency
+  outputPattern: "references/{groupId}/{artifactId.path}/{artifactId.lastLowercase}.{ext}"
+  maxDepth: 5
+  
+  # Explicit output path mappings for specific artifacts
+  # This solves the complex naming problem: nprod/sp.frame.Frame -> protos/sp/frame/frame.proto
+  outputOverrides:
+    # Registry-specific overrides (highest priority)
+    "nprod-apicurio:nprod/sp.frame.Frame": "protos/sp/frame/frame.{ext}"
+    "nprod-apicurio:nprod/google.protobuf.timestamp": "protos/google/protobuf/timestamp.{ext}"
+    "nprod-apicurio:nprod/sp.redd.v1.ReddAPI": "protos/sp/redd/v1/redd_api.{ext}"
+    "nprod-apicurio:nprod/sp.redd.v1.KafkaMessage": "protos/sp/redd/v1/redd_kafka.{ext}"
+    
+    # Skip certain artifacts entirely (set to null)
+    "nprod/sp.internal.Debug": null
+    "nprod/sp.testing.MockData": null
+    
+    # Group-level overrides (fallback when no registry-specific match)
+    "nprod/sp.frame.Frame": "protos/sp/frame/frame.{ext}"
+    "nprod/google.protobuf.timestamp": "protos/google/protobuf/timestamp.{ext}"
+
+registries:
+  - name: nprod-apicurio
+    url: https://nprod-apicurio.example.com
+    auth:
+      type: bearer
+      tokenEnv: NPROD_APICURIO_TOKEN
+
+dependencies:
+  # This dependency will automatically resolve its references
+  - name: nprod/sp.redd.v1.ReddAPI
+    version: 1.0.0
+    registry: nprod-apicurio
+    outputPath: protos/sp/redd/v1/redd_api.proto
+    # resolveReferences: true  # Optional per-dependency override (defaults to global setting)
+    
+  # This dependency will NOT resolve references even if globally enabled
+  - name: nprod/standalone.service
+    version: 2.0.0
+    registry: nprod-apicurio
+    outputPath: protos/standalone/service.proto
+    resolveReferences: false  # Override global setting for this dependency only
+
+# The lock file will contain:
+# 1. Direct dependencies: nprod/sp.redd.v1.ReddAPI, nprod/standalone.service  
+# 2. Transitive dependencies from ReddAPI references:
+#    - nprod/sp.frame.Frame -> protos/sp/frame/frame.proto
+#    - nprod/google.protobuf.timestamp -> protos/google/protobuf/timestamp.proto
+# 3. No transitive dependencies from standalone.service (resolveReferences: false)
+
+publishes:
+  - name: nprod/sp.redd.v1.ReddAPI
+    inputPath: protos/sp/redd/v1/redd_api.proto
+    version: 1.0.0
+    registry: nprod-apicurio
+    description: "Redd gRPC Service"
+    labels:
+      team: dsf
+      project: redd
+      service: redd
+    references:
+      - name: nprod/sp.frame.Frame
+        nameAlias: sp/frame/frame.proto
+        version: 4.3.1
+      - name: nprod/google.protobuf.timestamp
+        nameAlias: google/protobuf/timestamp.proto
+        version: 3.15.8

@@ -30,6 +30,54 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::{env, fs, path::PathBuf};
 
+/// Configuration for automatic reference resolution
+///
+/// Controls how transitive dependencies (references) are automatically resolved
+/// and where they are stored when not explicitly declared in dependencies.
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ReferenceResolutionConfig {
+    /// Whether to automatically resolve references
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Output path pattern for resolved references
+    /// Variables: {groupId}, {artifactId}, {version}, {ext}
+    /// Advanced variables: {artifactParts[0]}, {artifactParts[1]}, etc.
+    #[serde(default = "default_reference_pattern")]
+    pub output_pattern: String,
+    /// Maximum depth for reference resolution (prevents infinite loops)
+    #[serde(default = "default_max_depth")]
+    pub max_depth: u32,
+    /// Explicit output path overrides for specific artifacts
+    /// Key format: "groupId/artifactId" or "registry/groupId/artifactId"
+    /// Value: exact output path to use, or null to skip resolution entirely
+    #[serde(default)]
+    pub output_overrides: std::collections::HashMap<String, Option<String>>,
+}
+
+impl Default for ReferenceResolutionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            output_pattern: default_reference_pattern(),
+            max_depth: default_max_depth(),
+            output_overrides: std::collections::HashMap::new(),
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_reference_pattern() -> String {
+    "references/{groupId}/{artifactId}/{version}.{ext}".to_string()
+}
+
+fn default_max_depth() -> u32 {
+    5
+}
+
 /// Repository-specific configuration loaded from `apicurioconfig.yaml`
 ///
 /// This is the main configuration file for a project, containing:
@@ -65,6 +113,9 @@ pub struct RepoConfig {
     /// Dependencies to fetch from registries
     #[serde(default)]
     pub dependencies: Vec<DependencyConfig>,
+    /// Configuration for automatic reference resolution
+    #[serde(default)]
+    pub reference_resolution: ReferenceResolutionConfig,
     /// Artifacts to publish to registries
     #[serde(default)]
     pub publishes: Vec<PublishConfig>,
@@ -143,6 +194,9 @@ pub struct DependencyConfig {
     pub registry: String,
     /// Local path where the artifact should be saved
     pub output_path: String,
+    /// Override reference resolution for this specific dependency
+    #[serde(default)]
+    pub resolve_references: Option<bool>,
 }
 
 /// Publishing configuration for uploading artifacts to registries
@@ -561,6 +615,7 @@ mod tests {
             version: "1.0.0".to_string(),
             registry: "test".to_string(),
             output_path: "out.proto".to_string(),
+            resolve_references: None,
         };
 
         assert_eq!(dep_with_slash.resolved_group_id(), "com.example");
@@ -574,6 +629,7 @@ mod tests {
             version: "1.0.0".to_string(),
             registry: "test".to_string(),
             output_path: "out.proto".to_string(),
+            resolve_references: None,
         };
 
         assert_eq!(dep_simple.resolved_group_id(), "default");
@@ -587,6 +643,7 @@ mod tests {
             version: "1.0.0".to_string(),
             registry: "test".to_string(),
             output_path: "out.proto".to_string(),
+            resolve_references: None,
         };
 
         assert_eq!(dep_explicit.resolved_group_id(), "custom.group");
@@ -600,6 +657,7 @@ mod tests {
             version: "4.3.1".to_string(),
             registry: "nprod-apicurio".to_string(),
             output_path: "protos/sp/frame/frame.proto".to_string(),
+            resolve_references: None,
         };
 
         assert_eq!(dep_nprod.resolved_group_id(), "nprod");
@@ -616,6 +674,7 @@ mod tests {
             version: "1.0.0".to_string(),
             registry: "test".to_string(),
             output_path: "out.proto".to_string(),
+            resolve_references: None,
         };
 
         assert_eq!(dep_multi_slash.resolved_group_id(), "com.example");
@@ -629,6 +688,7 @@ mod tests {
             version: "1.0.0".to_string(),
             registry: "test".to_string(),
             output_path: "out.proto".to_string(),
+            resolve_references: None,
         };
 
         assert_eq!(dep_empty_group.resolved_group_id(), "");
@@ -642,6 +702,7 @@ mod tests {
             version: "1.0.0".to_string(),
             registry: "test".to_string(),
             output_path: "out.proto".to_string(),
+            resolve_references: None,
         };
 
         assert_eq!(dep_empty_artifact.resolved_group_id(), "group.only");
@@ -655,6 +716,7 @@ mod tests {
             version: "1.0.0".to_string(),
             registry: "test".to_string(),
             output_path: "out.proto".to_string(),
+            resolve_references: None,
         };
 
         assert_eq!(dep_partial_override.resolved_group_id(), "override.group");
@@ -668,6 +730,7 @@ mod tests {
             version: "1.0.0".to_string(),
             registry: "test".to_string(),
             output_path: "out.proto".to_string(),
+            resolve_references: None,
         };
 
         assert_eq!(dep_partial_override2.resolved_group_id(), "com.example");
@@ -689,6 +752,7 @@ mod tests {
             version: "1.0.0".to_string(),
             registry: "test".to_string(),
             output_path: "out.proto".to_string(),
+            resolve_references: None,
         };
 
         let publish = PublishConfig {

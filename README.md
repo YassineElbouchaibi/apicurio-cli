@@ -452,6 +452,25 @@ dependencies:
 # name: "user-service" → groupId: "default", artifactId: "user-service"
 # name: "nprod/sp.frame.Frame" → groupId: "nprod", artifactId: "sp.frame.Frame"
 
+# Reference resolution configuration
+referenceResolution:
+  enabled: true                     # Enable automatic reference resolution
+  outputPattern: string             # Pattern for transitive dependency paths
+  maxDepth: 5                       # Maximum reference resolution depth
+  outputOverrides:                  # Explicit path mappings
+    "groupId/artifactId": "path/pattern"
+    "registry:groupId/artifactId": "path/pattern"
+
+# Dependencies with per-dependency reference control
+dependencies:
+  - name: string                    # Required: dependency identifier
+    groupId: string                 # Optional: defaults from name
+    artifactId: string              # Optional: defaults from name  
+    version: string                 # Required: semver specification
+    registry: string                # Required: registry name
+    outputPath: string              # Required: local file path
+    resolveReferences: boolean      # Optional: override global reference resolution
+
 # Publishing configuration
 publishes:
   - name: string                    # Required: publish identifier

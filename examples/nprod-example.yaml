@@ -1,0 +1,57 @@
+# Example: Solving the nprod/sp.frame.Frame → protos/sp/frame/frame.proto mapping
+
+# Your CURRENT config would be:
+# dependencies:
+#   - name: nprod/sp.frame.Frame
+#     version: 4.3.1
+#     registry: nprod-apicurio
+#     outputPath: protos/sp/frame/frame.proto
+#   - name: nprod/google.protobuf.timestamp
+#     version: 3.15.8
+#     registry: nprod-apicurio
+#     outputPath: protos/google/protobuf/timestamp.proto
+#   - name: nprod/sp.redd.v1.ReddAPI
+#     version: 1.0.0
+#     registry: nprod-apicurio
+#     outputPath: protos/sp/redd/v1/redd_api.proto
+#   - name: nprod/sp.redd.v1.KafkaMessage
+#     version: 1.0.0
+#     registry: nprod-apicurio
+#     outputPath: protos/sp/redd/v1/redd_kafka.proto
+
+# With the NEW reference resolution, you can simplify to:
+dependencies:
+  # Only declare the top-level artifact you actually need
+  - name: nprod/sp.redd.v1.ReddAPI
+    version: 1.0.0
+    registry: nprod-apicurio
+    outputPath: protos/sp/redd/v1/redd_api.proto
+
+# Configure how references should be resolved
+referenceResolution:
+  enabled: true
+  maxDepth: 5
+  
+  # Use the improved pattern: artifactId.path excludes the last part (Frame)
+  # So sp.frame.Frame becomes sp/frame (without Frame)
+  outputPattern: "protos/{artifactId.path}/{artifactId.lastLowercase}.{ext}"
+  
+  # Map complex artifact names to your desired output paths
+  outputOverrides:
+    "nprod-apicurio:nprod/sp.frame.Frame": "protos/sp/frame/frame.{ext}"
+    "nprod-apicurio:nprod/google.protobuf.timestamp": "protos/google/protobuf/timestamp.{ext}"
+    "nprod-apicurio:nprod/sp.redd.v1.KafkaMessage": "protos/sp/redd/v1/redd_kafka.{ext}"
+    
+    # Skip certain internal artifacts entirely
+    "nprod/sp.internal.Debug": null
+
+# The system will automatically:
+# 1. Resolve nprod/sp.redd.v1.ReddAPI to version 1.0.0
+# 2. Fetch its version metadata to discover references
+# 3. Find that it references nprod/sp.frame.Frame@4.3.1 and nprod/google.protobuf.timestamp@3.15.8
+# 4. Use your outputOverrides to map these to the correct paths
+# 5. Lock all dependencies (direct + transitive) in the lock file
+# 6. Download all artifacts when you run 'apicurio pull'
+
+# Result: Your lock file will contain all 4 artifacts with correct paths,
+# but you only need to maintain 1 dependency declaration!

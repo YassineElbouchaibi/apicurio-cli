@@ -147,6 +147,7 @@ pub async fn run(identifier_str: Option<String>) -> Result<()> {
         version: identifier.version.unwrap(),
         registry: identifier.registry.unwrap(),
         output_path,
+        resolve_references: None, // Use global setting by default
     };
 
     if let Some(index) = existing_index {

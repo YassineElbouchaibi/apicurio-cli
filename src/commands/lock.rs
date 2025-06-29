@@ -1,14 +1,29 @@
 use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 use crate::{
     config::{load_global_config, load_repo_config},
     constants::{APICURIO_CONFIG, APICURIO_LOCK},
     dependency::Dependency,
-    lockfile::{LockFile, LockedDependency},
+    lockfile::{resolve_output_path, LockFile, LockedDependency},
     registry::RegistryClient,
 };
+
+/// Represents a dependency to be resolved (either direct or transitive)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct DependencyToResolve {
+    group_id: String,
+    artifact_id: String,
+    version_req: String, // For direct deps, this is semver. For transitive, exact version
+    registry: String,
+    output_path: Option<String>, // None for transitive deps
+    is_transitive: bool,
+    depth: u32,
+}
 
 pub async fn run() -> Result<()> {
     // 1) load repo + global + merge registries
@@ -55,57 +70,253 @@ pub async fn run() -> Result<()> {
         None
     };
 
-    // 3) for each declared dependency, resolve & hash
-    let mut new_locks = Vec::with_capacity(repo_cfg.dependencies.len());
-    for dep_cfg in &repo_cfg.dependencies {
-        // parse semver requirement
-        let dep = Dependency::from_config(dep_cfg)?;
-        let client = &clients[&dep.registry];
+    // 3) Build initial set of dependencies to resolve
+    let mut dependencies_to_resolve = Vec::new();
 
-        // list+filter versions
-        let all_versions = client
-            .list_versions(&dep.group_id, &dep.artifact_id)
+    // Add direct dependencies from config
+    for dep_cfg in &repo_cfg.dependencies {
+        let dep = Dependency::from_config(dep_cfg)?;
+        dependencies_to_resolve.push(DependencyToResolve {
+            group_id: dep.group_id.clone(),
+            artifact_id: dep.artifact_id.clone(),
+            version_req: dep_cfg.version.clone(),
+            registry: dep.registry.clone(),
+            output_path: Some(dep.output_path.clone()),
+            is_transitive: false,
+            depth: 0,
+        });
+    }
+
+    // 4) Resolve all dependencies including transitive references
+    let mut resolved_dependencies = HashMap::new();
+    let mut processed = HashSet::new();
+
+    while let Some(dep_to_resolve) = dependencies_to_resolve.pop() {
+        let key = format!(
+            "{}:{}:{}",
+            dep_to_resolve.registry, dep_to_resolve.group_id, dep_to_resolve.artifact_id
+        );
+
+        // Skip if already processed
+        if processed.contains(&key) {
+            continue;
+        }
+        processed.insert(key.clone());
+
+        // Skip if depth exceeds maximum
+        if dep_to_resolve.depth > repo_cfg.reference_resolution.max_depth {
+            eprintln!(
+                "Warning: Skipping reference resolution for {} at depth {} (exceeds max depth {})",
+                key, dep_to_resolve.depth, repo_cfg.reference_resolution.max_depth
+            );
+            continue;
+        }
+
+        let client = &clients[&dep_to_resolve.registry];
+
+        // Resolve version
+        let resolved_version = if dep_to_resolve.is_transitive {
+            // For transitive deps, version_req is already exact
+            semver::Version::parse(&dep_to_resolve.version_req)?
+        } else {
+            // For direct deps, resolve semver range
+            let dep = Dependency {
+                name: format!("{}/{}", dep_to_resolve.group_id, dep_to_resolve.artifact_id),
+                group_id: dep_to_resolve.group_id.clone(),
+                artifact_id: dep_to_resolve.artifact_id.clone(),
+                req: semver::VersionReq::parse(&dep_to_resolve.version_req)?,
+                registry: dep_to_resolve.registry.clone(),
+                output_path: dep_to_resolve.output_path.clone().unwrap_or_default(),
+            };
+
+            let all_versions = client
+                .list_versions(&dep.group_id, &dep.artifact_id)
+                .await
+                .with_context(|| {
+                    format!("listing versions for {}/{}", dep.group_id, dep.artifact_id)
+                })?;
+
+            let selected = all_versions
+                .iter()
+                .filter(|v| dep.req.matches(v))
+                .max()
+                .with_context(|| {
+                    format!(
+                        "no version matching '{}' for dependency '{}'",
+                        dep_to_resolve.version_req, dep.name
+                    )
+                })?;
+            selected.clone()
+        };
+
+        // Download content for hashing
+        let data = client
+            .download(
+                &dep_to_resolve.group_id,
+                &dep_to_resolve.artifact_id,
+                &resolved_version,
+            )
             .await
             .with_context(|| {
-                format!("listing versions for {}/{}", dep.group_id, dep.artifact_id)
-            })?;
-
-        let selected = all_versions
-            .iter()
-            .filter(|v| dep.req.matches(v))
-            .max()
-            .with_context(|| {
                 format!(
-                    "no version matching '{}' for dependency '{}'",
-                    dep_cfg.version, dep_cfg.name
+                    "downloading content for {}:{} v{}",
+                    dep_to_resolve.group_id, dep_to_resolve.artifact_id, resolved_version
                 )
             })?;
 
-        // download bytes just for hashing
-        let data = client
-            .download(&dep.group_id, &dep.artifact_id, selected)
-            .await
-            .with_context(|| format!("downloading content for {} v{}", dep_cfg.name, selected))?;
-
-        // compute sha256
+        // Compute SHA256
         let sha256 = {
             let mut hasher = Sha256::new();
             hasher.update(&data);
             hex::encode(hasher.finalize())
         };
 
-        new_locks.push(LockedDependency {
-            name: dep_cfg.name.clone(),
-            registry: dep.registry.clone(),
-            resolved_version: selected.to_string(),
-            download_url: client.get_download_url(&dep.group_id, &dep.artifact_id, selected),
+        // Determine output path
+        let output_path = if let Some(path) = dep_to_resolve.output_path {
+            Some(path)
+        } else {
+            // Generate path for transitive dependency using pattern and overrides
+            let metadata = client
+                .get_artifact_metadata(&dep_to_resolve.group_id, &dep_to_resolve.artifact_id)
+                .await?;
+            resolve_output_path(
+                &repo_cfg.reference_resolution.output_pattern,
+                &repo_cfg.reference_resolution.output_overrides,
+                &dep_to_resolve.registry,
+                &dep_to_resolve.group_id,
+                &dep_to_resolve.artifact_id,
+                &resolved_version.to_string(),
+                &metadata.artifact_type,
+            )
+        };
+
+        // Skip this dependency if it's mapped to null (excluded from resolution)
+        let output_path = match output_path {
+            Some(path) => path,
+            None => {
+                println!(
+                    "  ⏭️  Skipping transitive dependency {}:{} (mapped to null)",
+                    dep_to_resolve.group_id, dep_to_resolve.artifact_id
+                );
+                continue; // Skip to next dependency
+            }
+        };
+
+        // Create locked dependency
+        let locked_dep = LockedDependency {
+            name: if dep_to_resolve.is_transitive {
+                format!("{}/{}", dep_to_resolve.group_id, dep_to_resolve.artifact_id)
+            } else {
+                // Find the original name from config
+                repo_cfg
+                    .dependencies
+                    .iter()
+                    .find(|cfg| {
+                        let dep = Dependency::from_config(cfg).unwrap();
+                        dep.group_id == dep_to_resolve.group_id
+                            && dep.artifact_id == dep_to_resolve.artifact_id
+                    })
+                    .map(|cfg| cfg.name.clone())
+                    .unwrap_or_else(|| {
+                        format!("{}/{}", dep_to_resolve.group_id, dep_to_resolve.artifact_id)
+                    })
+            },
+            registry: dep_to_resolve.registry.clone(),
+            resolved_version: resolved_version.to_string(),
+            download_url: client.get_download_url(
+                &dep_to_resolve.group_id,
+                &dep_to_resolve.artifact_id,
+                &resolved_version,
+            ),
             sha256,
-            output_path: dep.output_path.clone(),
-            group_id: dep.group_id.clone(),
-            artifact_id: dep.artifact_id.clone(),
-            version_spec: dep_cfg.version.clone(),
-        });
+            output_path,
+            group_id: dep_to_resolve.group_id.clone(),
+            artifact_id: dep_to_resolve.artifact_id.clone(),
+            version_spec: dep_to_resolve.version_req.clone(),
+            is_transitive: dep_to_resolve.is_transitive,
+        };
+
+        resolved_dependencies.insert(key, locked_dep);
+
+        // Determine if reference resolution should be enabled for this dependency
+        let should_resolve_references = if dep_to_resolve.is_transitive {
+            // For transitive dependencies, always use global setting
+            repo_cfg.reference_resolution.enabled
+        } else {
+            // For direct dependencies, check per-dependency override first
+            let original_dep_config = repo_cfg.dependencies.iter().find(|cfg| {
+                let dep = Dependency::from_config(cfg).unwrap();
+                dep.group_id == dep_to_resolve.group_id
+                    && dep.artifact_id == dep_to_resolve.artifact_id
+            });
+
+            match original_dep_config.and_then(|cfg| cfg.resolve_references) {
+                Some(override_setting) => override_setting,
+                None => repo_cfg.reference_resolution.enabled,
+            }
+        };
+
+        // If reference resolution is enabled, get version references
+        if should_resolve_references
+            && dep_to_resolve.depth < repo_cfg.reference_resolution.max_depth
+        {
+            match client
+                .get_version_references(
+                    &dep_to_resolve.group_id,
+                    &dep_to_resolve.artifact_id,
+                    &resolved_version,
+                    None,
+                )
+                .await
+            {
+                Ok(references) => {
+                    for reference in references {
+                        // Use "default" as the group_id if the reference doesn't specify one
+                        let ref_group_id = reference.group_id.as_deref().unwrap_or("default");
+
+                        let ref_key = format!(
+                            "{}:{}:{}",
+                            dep_to_resolve.registry, ref_group_id, reference.artifact_id
+                        );
+
+                        // Only add if not already processed or in queue
+                        if !processed.contains(&ref_key)
+                            && !dependencies_to_resolve.iter().any(|d| {
+                                format!("{}:{}:{}", d.registry, d.group_id, d.artifact_id)
+                                    == ref_key
+                            })
+                        {
+                            dependencies_to_resolve.push(DependencyToResolve {
+                                group_id: ref_group_id.to_string(),
+                                artifact_id: reference.artifact_id,
+                                version_req: reference.version, // References use exact versions
+                                registry: dep_to_resolve.registry.clone(), // Use same registry as parent
+                                output_path: None, // Will be generated using pattern
+                                is_transitive: true,
+                                depth: dep_to_resolve.depth + 1,
+                            });
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Warning: Failed to get version references for {}:{} v{}: {}",
+                        dep_to_resolve.group_id, dep_to_resolve.artifact_id, resolved_version, e
+                    );
+                }
+            }
+        }
     }
+
+    // Convert resolved dependencies to vector
+    let mut new_locks: Vec<LockedDependency> = resolved_dependencies.into_values().collect();
+
+    // Sort to ensure consistent ordering (direct deps first, then alphabetical)
+    new_locks.sort_by(|a, b| match (a.is_transitive, b.is_transitive) {
+        (false, true) => std::cmp::Ordering::Less,
+        (true, false) => std::cmp::Ordering::Greater,
+        _ => a.name.cmp(&b.name),
+    });
 
     // 4) Create new lockfile with metadata including config modification time
     let config_modified = LockFile::get_config_modification_time(&config_path).ok();
@@ -305,6 +516,7 @@ mod tests {
             group_id: "com.example".to_string(),
             artifact_id: "test".to_string(),
             version_spec: "^1.0".to_string(),
+            is_transitive: false,
         });
 
         let clients = HashMap::new(); // Empty clients map
@@ -347,6 +559,7 @@ mod tests {
             group_id: "com.example".to_string(),
             artifact_id: "test".to_string(),
             version_spec: "^1.0".to_string(),
+            is_transitive: false,
         }];
 
         let new_deps = vec![LockedDependency {
@@ -359,6 +572,7 @@ mod tests {
             group_id: "com.example".to_string(),
             artifact_id: "test".to_string(),
             version_spec: "^1.0".to_string(),
+            is_transitive: false,
         }];
 
         // Verify old file exists before cleanup
@@ -401,6 +615,7 @@ mod tests {
             group_id: "com.example".to_string(),
             artifact_id: "test".to_string(),
             version_spec: "^1.0".to_string(),
+            is_transitive: false,
         }];
 
         let new_deps = vec![]; // Empty - dependency removed
@@ -445,6 +660,7 @@ mod tests {
             group_id: "com.example".to_string(),
             artifact_id: "test".to_string(),
             version_spec: "^1.0".to_string(),
+            is_transitive: false,
         }];
 
         // Verify file exists before cleanup
