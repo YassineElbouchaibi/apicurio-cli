@@ -141,7 +141,7 @@ args = ["-f", "docker-compose.dev.yml", "down"]
 [tasks.registry-status]
 description = "Check registry status"
 script = '''
-curl -s http://localhost:8080/apis/registry/v2/system/info | jq . || echo "Registry not responding"
+curl -s http://localhost:8080/apis/registry/v3/system/info | jq . || echo "Registry not responding"
 '''
 
 # Example workflows

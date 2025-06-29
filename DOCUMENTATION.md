@@ -14,7 +14,7 @@ This document provides an overview of all the documentation created for the Apic
 ### Configuration Examples
 - **examples/apicurioconfig.yaml** - Comprehensive example project configuration
 - **examples/registries.yaml** - Example global registries configuration
-- **examples/docker-compose.yaml** - Local development environment setup
+- **docker-compose.dev.yaml** - Local development environment setup
 
 ### Development Tools
 - **Makefile.toml** - cargo-make tasks for development workflows

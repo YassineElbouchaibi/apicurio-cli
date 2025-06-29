@@ -72,7 +72,7 @@ jobs:
           REGISTRY_LOG_LEVEL: DEBUG
           CORS_ALLOWED_ORIGINS: "*"
         options: >-
-          --health-cmd "curl -f http://localhost:8080/apis/registry/v2/system/info || exit 1"
+          --health-cmd "curl -f http://localhost:8080/apis/registry/v3/system/info || exit 1"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -104,7 +104,7 @@ jobs:
       - name: Wait for registry
         run: |
           echo "Waiting for Apicurio Registry to be ready..."
-          timeout 60 bash -c 'until curl -f http://localhost:8080/apis/registry/v2/system/info; do sleep 2; done'
+          timeout 60 bash -c 'until curl -f http://localhost:8080/apis/registry/v3/system/info; do sleep 2; done'
           echo "Registry is ready!"
 
       - name: Build

@@ -20,6 +20,11 @@ path = "src/main.rs"
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
+[package.metadata.precommit]
+clippy = "cargo clippy --all-targets --all-features --fix --allow-dirty"
+fmt = "cargo fmt"
+test = "cargo test"
+
 [dependencies]
 anyhow = "1.0"
 base64 = "0.13"

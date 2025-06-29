@@ -654,7 +654,7 @@ echo $COMPANY_REGISTRY_TOKEN
 
 # Test manual access
 curl -H "Authorization: Bearer $COMPANY_REGISTRY_TOKEN" \
-  https://registry.company.com/apis/registry/v2/system/info
+  https://registry.company.com/apis/registry/v3/system/info
 
 # Verify in apicurio
 apicurio doctor

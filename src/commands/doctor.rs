@@ -39,13 +39,10 @@ pub async fn run() -> Result<()> {
     let merged = repo_cfg.merge_registries(global_cfg.clone())?;
     for r in &merged {
         let client = RegistryClient::new(r)?;
-        let health = format!("{}/apis/registry/v2/health", r.url);
         client
-            .client
-            .get(&health)
-            .send()
+            .get_system_info()
             .await
-            .with_context(|| format!("cannot reach {health}"))?;
+            .with_context(|| format!("cannot reach registry '{}'", r.name))?;
     }
 
     // 3) check each dependency’s semver & registry existence

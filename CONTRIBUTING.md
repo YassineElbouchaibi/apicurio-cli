@@ -48,7 +48,7 @@ This project adheres to a code of conduct that we expect all contributors to fol
 5. **Run tests:**
    ```bash
    # Start local registry for integration tests
-   docker-compose -f examples/docker-compose.yaml up -d
+   docker-compose -f docker-compose.dev.yaml up -d
    
    # Run all tests
    cargo test
@@ -246,16 +246,10 @@ mod tests {
 cargo test
 
 # Unit tests only
-cargo test
+cargo test --lib
 
 # Integration tests only
-cargo test --test integration
-
-# Specific test
-cargo test test_name
-
-# With output
-cargo test -- --nocapture
+cargo test --tests
 
 # With logging
 RUST_LOG=debug cargo test

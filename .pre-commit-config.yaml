@@ -1,0 +1,21 @@
+repos:
+  - repo: local
+    hooks:
+      - id: clippy
+        name: clippy
+        description: Check if all files follow the clippy style
+        entry: cargo clippy --all-targets --all-features --allow-dirty --fix -- -D warnings
+        language: system
+        pass_filenames: false
+      - id: fmt
+        name: fmt
+        description: Check if all files follow the rustfmt style
+        entry: cargo fmt --all -- --color always
+        language: system
+        pass_filenames: false
+      - id: test
+        name: test
+        description: Run all tests
+        entry: cargo test --all-targets --all-features
+        language: system
+        pass_filenames: false

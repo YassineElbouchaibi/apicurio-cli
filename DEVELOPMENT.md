@@ -24,10 +24,10 @@ For development and testing, start a local Apicurio Registry:
 
 ```bash
 # Start registry with in-memory storage
-docker-compose -f examples/docker-compose.yaml up -d
+docker-compose -f docker-compose.dev.yaml up -d
 
 # Verify registry is running
-curl http://localhost:8080/apis/registry/v2/system/info
+curl http://localhost:8080/apis/registry/v3/system/info
 ```
 
 ### 3. Run the CLI
@@ -49,12 +49,6 @@ cargo build
 # Run all tests
 cargo test
 
-# Run tests with output
-cargo test -- --nocapture
-
-# Run specific test module
-cargo test config
-
 # Run with debug logging
 RUST_LOG=debug cargo test
 ```
@@ -65,10 +59,10 @@ The integration tests require a running Apicurio Registry on `localhost:8080`:
 
 ```bash
 # Start local registry
-docker-compose -f examples/docker-compose.yaml up -d
+docker-compose -f docker-compose.dev.yaml up -d
 
 # Run integration tests
-cargo test lockfile_integration
+cargo test --tests
 
 # Run all tests including integration
 cargo test
@@ -235,10 +229,10 @@ RUST_LOG=apicurio_cli::registry=debug cargo run -- pull
 **1. Registry Connection Failures**
 ```bash
 # Check if registry is running
-curl http://localhost:8080/apis/registry/v2/system/info
+curl http://localhost:8080/apis/registry/v3/system/info
 
 # Restart registry
-docker-compose -f examples/docker-compose.yaml restart
+docker-compose -f docker-compose.dev.yaml restart
 ```
 
 **2. Lock File Issues**
@@ -255,7 +249,7 @@ echo $APICURIO_TOKEN
 
 # Test registry access manually
 curl -H "Authorization: Bearer $APICURIO_TOKEN" \
-  http://localhost:8080/apis/registry/v2/groups
+  http://localhost:8080/apis/registry/v3/groups
 ```
 
 ## Release Process
@@ -268,18 +262,7 @@ curl -H "Authorization: Bearer $APICURIO_TOKEN" \
 6. Publish to cargo (if applicable)
 
 ```bash
-# Update version and test
-cargo test
-cargo build --release
-
-# Tag release
-git tag v0.2.0
-git push origin v0.2.0
-
-# Build release artifacts
-cargo build --release --target x86_64-unknown-linux-gnu
-cargo build --release --target x86_64-apple-darwin
-cargo build --release --target x86_64-pc-windows-gnu
+./scripts/release.sh <new_version> # e.g. ./scripts/release.sh 1.2.0
 ```
 
 ## Performance Considerations

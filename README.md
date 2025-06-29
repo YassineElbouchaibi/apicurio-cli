@@ -143,7 +143,7 @@ lockedDependencies:
   - name: user-service-protos
     registry: production
     resolvedVersion: 1.2.3
-    downloadUrl: https://registry.example.com/apis/registry/v2/groups/com.example.services/artifacts/user-service/versions/1.2.3/content
+    downloadUrl: https://registry.example.com/apis/registry/v3/groups/com.example.services/artifacts/user-service/versions/1.2.3/content
     sha256: a1b2c3d4e5f6...
     outputPath: protos/user-service.proto
     groupId: com.example.services
@@ -459,7 +459,7 @@ apicurio update
 **4. Network connectivity:**
 ```bash
 # Test registry connectivity
-curl -H "Authorization: Bearer $APICURIO_TOKEN" https://registry.example.com/apis/registry/v2/groups
+curl -H "Authorization: Bearer $APICURIO_TOKEN" https://registry.example.com/apis/registry/v3/groups
 ```
 
 ### Debug Mode

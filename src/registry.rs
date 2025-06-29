@@ -41,6 +41,16 @@ pub struct ArtifactMetadata {
     pub group_id: Option<String>,
 }
 
+#[allow(dead_code)]
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemInfo {
+    pub name: String,
+    pub description: String,
+    pub version: String,
+    pub built_on: String,
+}
+
 pub struct RegistryClient {
     #[allow(dead_code)]
     pub name: String,
@@ -423,5 +433,13 @@ impl RegistryClient {
         );
         let resp = self.client.get(&url).send().await?.error_for_status()?;
         Ok(resp.text().await?)
+    }
+
+    /// Get system information from the registry
+    pub async fn get_system_info(&self) -> Result<SystemInfo> {
+        let url = format!("{}/apis/registry/v3/system/info", self.base_url);
+        let resp = self.client.get(&url).send().await?.error_for_status()?;
+        let system_info: SystemInfo = resp.json().await?;
+        Ok(system_info)
     }
 }
