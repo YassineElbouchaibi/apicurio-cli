@@ -120,7 +120,7 @@ impl Identifier {
                         // Fall back to existing dependencies if registry query fails
                         available_group_ids = existing_dependencies
                             .iter()
-                            .map(|d| d.group_id.clone())
+                            .map(|d| d.resolved_group_id())
                             .collect::<std::collections::HashSet<_>>()
                             .into_iter()
                             .collect();
@@ -130,7 +130,7 @@ impl Identifier {
                 // No registry client, use existing dependencies
                 available_group_ids = existing_dependencies
                     .iter()
-                    .map(|d| d.group_id.clone())
+                    .map(|d| d.resolved_group_id())
                     .collect::<std::collections::HashSet<_>>()
                     .into_iter()
                     .collect();
@@ -180,8 +180,8 @@ impl Identifier {
                             // Fall back to existing dependencies if registry query fails
                             available_artifacts = existing_dependencies
                                 .iter()
-                                .filter(|d| d.group_id == *group_id)
-                                .map(|d| d.artifact_id.clone())
+                                .filter(|d| d.resolved_group_id() == *group_id)
+                                .map(|d| d.resolved_artifact_id())
                                 .collect::<std::collections::HashSet<_>>()
                                 .into_iter()
                                 .collect();
@@ -194,8 +194,10 @@ impl Identifier {
                 // No registry client, use existing dependencies
                 available_artifacts = existing_dependencies
                     .iter()
-                    .filter(|d| d.group_id == *self.group_id.as_ref().unwrap_or(&String::new()))
-                    .map(|d| d.artifact_id.clone())
+                    .filter(|d| {
+                        d.resolved_group_id() == *self.group_id.as_ref().unwrap_or(&String::new())
+                    })
+                    .map(|d| d.resolved_artifact_id())
                     .collect::<std::collections::HashSet<_>>()
                     .into_iter()
                     .collect();
@@ -344,9 +346,11 @@ impl Identifier {
 
             // Check group_id match
             if let Some(group_id) = &self.group_id {
-                if dep.group_id == *group_id {
+                let resolved_group_id = dep.resolved_group_id();
+                if resolved_group_id == *group_id {
                     score += 100;
-                } else if let Some(fuzzy_score) = matcher.fuzzy_match(&dep.group_id, group_id) {
+                } else if let Some(fuzzy_score) = matcher.fuzzy_match(&resolved_group_id, group_id)
+                {
                     score += fuzzy_score;
                 } else {
                     is_match = false;
@@ -355,9 +359,11 @@ impl Identifier {
 
             // Check artifact_id match
             if let Some(artifact_id) = &self.artifact_id {
-                if dep.artifact_id == *artifact_id {
+                let resolved_artifact_id = dep.resolved_artifact_id();
+                if resolved_artifact_id == *artifact_id {
                     score += 100;
-                } else if let Some(fuzzy_score) = matcher.fuzzy_match(&dep.artifact_id, artifact_id)
+                } else if let Some(fuzzy_score) =
+                    matcher.fuzzy_match(&resolved_artifact_id, artifact_id)
                 {
                     score += fuzzy_score;
                 } else {
@@ -389,12 +395,12 @@ impl Identifier {
                 }
             }
             if let Some(group_id) = &self.group_id {
-                if dep.group_id == *group_id {
+                if dep.resolved_group_id() == *group_id {
                     score += 100;
                 }
             }
             if let Some(artifact_id) = &self.artifact_id {
-                if dep.artifact_id == *artifact_id {
+                if dep.resolved_artifact_id() == *artifact_id {
                     score += 100;
                 }
             }

@@ -15,8 +15,8 @@ impl Dependency {
     pub fn from_config(cfg: &DependencyConfig) -> Result<Self> {
         Ok(Dependency {
             name: cfg.name.clone(),
-            group_id: cfg.group_id.clone(),
-            artifact_id: cfg.artifact_id.clone(),
+            group_id: cfg.resolved_group_id(),
+            artifact_id: cfg.resolved_artifact_id(),
             req: VersionReq::parse(&cfg.version)?,
             registry: cfg.registry.clone(),
             output_path: cfg.output_path.clone(),

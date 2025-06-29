@@ -365,6 +365,73 @@ dependencies:
     outputPath: protos/common/types.proto
 ```
 
+### Smart Dependency Resolution
+
+Apicurio CLI supports smart resolution of `groupId` and `artifactId` from the dependency `name`, reducing configuration verbosity:
+
+```yaml
+# Traditional explicit approach
+dependencies:
+  - name: user-service-protos
+    groupId: com.company.services  
+    artifactId: user-service
+    version: ^1.0.0
+    registry: production
+    outputPath: protos/user-service.proto
+
+# Smart resolution approach - same result!
+dependencies:
+  - name: com.company.services/user-service  # Smart resolution from name
+    version: ^1.0.0
+    registry: production
+    outputPath: protos/user-service.proto
+```
+
+**Smart Resolution Rules:**
+- Format `group/artifact` → `groupId: group`, `artifactId: artifact`
+- Simple name → `groupId: default`, `artifactId: name`
+- Explicit fields override smart resolution when needed
+
+**Examples:**
+
+```yaml
+dependencies:
+  # Group/artifact format
+  - name: com.example/user-service
+    # → groupId: com.example, artifactId: user-service
+    version: ^1.0.0
+    registry: prod
+    outputPath: protos/user.proto
+    
+  # Simple name format  
+  - name: payment-events
+    # → groupId: default, artifactId: payment-events
+    version: ~2.1.0
+    registry: prod
+    outputPath: schemas/payment.avsc
+    
+  # Complex artifact names
+  - name: nprod/sp.frame.Frame
+    # → groupId: nprod, artifactId: sp.frame.Frame
+    version: 4.3.1
+    registry: nprod-registry
+    outputPath: protos/sp/frame/frame.proto
+    
+  # Override when needed
+  - name: my-custom-alias          # Just an alias
+    groupId: com.special.namespace # Explicit override
+    artifactId: actual-service     # Explicit override
+    version: ^1.0.0
+    registry: prod
+    outputPath: protos/special.proto
+```
+
+**Benefits:**
+- Less verbose configuration
+- Consistent with publishing configuration
+- Self-documenting artifact relationships
+- Easy migration from Maven/Gradle-style identifiers
+
 ## Publishing Workflows
 
 ### Development to Production Pipeline

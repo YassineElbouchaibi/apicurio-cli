@@ -119,8 +119,31 @@ pub async fn run(identifier_str: Option<String>) -> Result<()> {
 
     let new_dependency = DependencyConfig {
         name: dep_name.clone(),
-        group_id: identifier.group_id.unwrap(),
-        artifact_id: identifier.artifact_id.unwrap(),
+        // Only set explicit group_id/artifact_id if they differ from what would be resolved from name
+        group_id: {
+            let resolved_from_name = if let Some((group, _)) = dep_name.split_once('/') {
+                group.to_string()
+            } else {
+                "default".to_string()
+            };
+            if resolved_from_name == *identifier.group_id.as_ref().unwrap() {
+                None // Can be resolved from name
+            } else {
+                Some(identifier.group_id.unwrap())
+            }
+        },
+        artifact_id: {
+            let resolved_from_name = if let Some((_, artifact)) = dep_name.split_once('/') {
+                artifact.to_string()
+            } else {
+                dep_name.clone()
+            };
+            if resolved_from_name == *identifier.artifact_id.as_ref().unwrap() {
+                None // Can be resolved from name
+            } else {
+                Some(identifier.artifact_id.unwrap())
+            }
+        },
         version: identifier.version.unwrap(),
         registry: identifier.registry.unwrap(),
         output_path,

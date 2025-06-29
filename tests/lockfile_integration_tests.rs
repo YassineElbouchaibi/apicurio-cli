@@ -35,8 +35,8 @@ dependencies:
 
     let deps = vec![config::DependencyConfig {
         name: "service1".to_string(),
-        group_id: "com.example".to_string(),
-        artifact_id: "service1".to_string(),
+        group_id: Some("com.example".to_string()),
+        artifact_id: Some("service1".to_string()),
         version: "^1.0.0".to_string(),
         registry: "default".to_string(),
         output_path: "./protos/service1.proto".to_string(),
@@ -90,8 +90,8 @@ dependencies:
 
     let modified_deps = vec![config::DependencyConfig {
         name: "service1".to_string(),
-        group_id: "com.example".to_string(),
-        artifact_id: "service1".to_string(),
+        group_id: Some("com.example".to_string()),
+        artifact_id: Some("service1".to_string()),
         version: "^1.1.0".to_string(), // Changed version
         registry: "default".to_string(),
         output_path: "./protos/service1.proto".to_string(),
@@ -111,8 +111,8 @@ fn test_formatting_changes_dont_trigger_regeneration() {
 
     let deps = vec![config::DependencyConfig {
         name: "service1".to_string(),
-        group_id: "com.example".to_string(),
-        artifact_id: "service1".to_string(),
+        group_id: Some("com.example".to_string()),
+        artifact_id: Some("service1".to_string()),
         version: "^1.0.0".to_string(),
         registry: "default".to_string(),
         output_path: "./protos/service1.proto".to_string(),
@@ -159,8 +159,8 @@ dependencies:
 fn test_registry_changes_trigger_regeneration() {
     let deps = vec![config::DependencyConfig {
         name: "service1".to_string(),
-        group_id: "com.example".to_string(),
-        artifact_id: "service1".to_string(),
+        group_id: Some("com.example".to_string()),
+        artifact_id: Some("service1".to_string()),
         version: "^1.0.0".to_string(),
         registry: "default".to_string(),
         output_path: "./protos".to_string(),
@@ -206,8 +206,8 @@ dependencies:
 fn test_external_registry_file_changes_trigger_regeneration() {
     let deps = vec![config::DependencyConfig {
         name: "service1".to_string(),
-        group_id: "com.example".to_string(),
-        artifact_id: "service1".to_string(),
+        group_id: Some("com.example".to_string()),
+        artifact_id: Some("service1".to_string()),
         version: "^1.0.0".to_string(),
         registry: "default".to_string(),
         output_path: "./protos".to_string(),

@@ -225,7 +225,12 @@ impl LockFile {
             .map(|d| {
                 format!(
                     "{}:{}:{}:{}:{}:{}",
-                    d.name, d.group_id, d.artifact_id, d.version, d.registry, d.output_path
+                    d.name,
+                    d.resolved_group_id(),
+                    d.resolved_artifact_id(),
+                    d.version,
+                    d.registry,
+                    d.output_path
                 )
             })
             .collect();
@@ -351,8 +356,8 @@ dependencies:{deps}"#
         use crate::config::DependencyConfig;
         let deps1 = vec![DependencyConfig {
             name: "dep1".to_string(),
-            group_id: "com.example".to_string(),
-            artifact_id: "service1".to_string(),
+            group_id: Some("com.example".to_string()),
+            artifact_id: Some("service1".to_string()),
             version: "1.0.0".to_string(),
             registry: "registry1".to_string(),
             output_path: "./protos".to_string(),
@@ -360,8 +365,8 @@ dependencies:{deps}"#
 
         let deps3 = vec![DependencyConfig {
             name: "dep1".to_string(),
-            group_id: "com.example".to_string(),
-            artifact_id: "service1".to_string(),
+            group_id: Some("com.example".to_string()),
+            artifact_id: Some("service1".to_string()),
             version: "1.1.0".to_string(),
             registry: "registry1".to_string(),
             output_path: "./protos".to_string(),
@@ -537,16 +542,16 @@ dependencies:{deps}"#
         let deps1 = vec![
             crate::config::DependencyConfig {
                 name: "dep_a".to_string(),
-                group_id: "com.example".to_string(),
-                artifact_id: "service_a".to_string(),
+                group_id: Some("com.example".to_string()),
+                artifact_id: Some("service_a".to_string()),
                 version: "1.0.0".to_string(),
                 registry: "registry1".to_string(),
                 output_path: "./protos".to_string(),
             },
             crate::config::DependencyConfig {
                 name: "dep_b".to_string(),
-                group_id: "com.example".to_string(),
-                artifact_id: "service_b".to_string(),
+                group_id: Some("com.example".to_string()),
+                artifact_id: Some("service_b".to_string()),
                 version: "2.0.0".to_string(),
                 registry: "registry1".to_string(),
                 output_path: "./protos".to_string(),
@@ -567,8 +572,8 @@ dependencies:{deps}"#
         // Test that the improved hash function ignores formatting differences
         let deps = vec![crate::config::DependencyConfig {
             name: "dep1".to_string(),
-            group_id: "com.example".to_string(),
-            artifact_id: "service1".to_string(),
+            group_id: Some("com.example".to_string()),
+            artifact_id: Some("service1".to_string()),
             version: "1.0.0".to_string(),
             registry: "registry1".to_string(),
             output_path: "./protos".to_string(),

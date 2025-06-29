@@ -5,6 +5,24 @@ All notable changes to the Apicurio CLI project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Smart dependency resolution for `groupId` and `artifactId` fields
+  - Dependencies can now use `name` in "group/artifact" format for automatic resolution
+  - `groupId` and `artifactId` are now optional in dependency configuration
+  - Explicit fields override smart resolution when needed
+  - Consistent behavior with publishing configuration
+
+### Changed
+- Dependency configuration now supports smart resolution from `name` field
+- Updated documentation with comprehensive smart resolution examples
+- Enhanced unit tests for edge cases in dependency resolution
+
+### Fixed
+- Identifier matching now uses resolved values for accurate dependency lookup
+- Remove command displays resolved artifact IDs for better user experience
+
 ## [0.1.3] - 2025-06-28
 
 ### Added

@@ -22,7 +22,12 @@ pub async fn run(identifier_str: String) -> Result<()> {
         println!("No dependencies found matching identifier: '{identifier_str}'");
         println!("Available dependencies:");
         for dep in &repo.dependencies {
-            println!("  - {} ({}@{})", dep.name, dep.artifact_id, dep.version);
+            println!(
+                "  - {} ({}@{})",
+                dep.name,
+                dep.resolved_artifact_id(),
+                dep.version
+            );
         }
         return Ok(());
     }
@@ -38,7 +43,10 @@ pub async fn run(identifier_str: String) -> Result<()> {
             .map(|dep| {
                 format!(
                     "{} ({}@{} from {})",
-                    dep.name, dep.artifact_id, dep.version, dep.registry
+                    dep.name,
+                    dep.resolved_artifact_id(),
+                    dep.version,
+                    dep.registry
                 )
             })
             .collect();

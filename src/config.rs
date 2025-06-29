@@ -48,9 +48,8 @@ use std::{env, fs, path::PathBuf};
 ///       type: bearer
 ///       tokenEnv: APICURIO_TOKEN
 /// dependencies:
-///   - name: user-service
-///     groupId: com.example
-///     artifactId: user-service
+///   # Smart resolution from name (groupId: com.example, artifactId: user-service)
+///   - name: com.example/user-service
 ///     version: ^1.0.0
 ///     registry: production
 ///     outputPath: protos/user-service.proto
@@ -122,15 +121,22 @@ pub enum AuthConfig {
 ///
 /// Dependencies support semantic version ranges and are resolved to exact
 /// versions in the lock file for reproducible builds.
+///
+/// Smart resolution is supported for `group_id` and `artifact_id`:
+/// - If `name` is in "group/artifact" format, group_id defaults to "group" and artifact_id to "artifact"
+/// - If `name` is simple, group_id defaults to "default" and artifact_id to the name
+/// - Explicit `group_id` and `artifact_id` override the smart defaults
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DependencyConfig {
-    /// Local name/alias for this dependency
+    /// Local name/alias for this dependency (supports group/artifact format for smart resolution)
     pub name: String,
-    /// Group ID of the artifact in the registry
-    pub group_id: String,
-    /// Artifact ID in the registry
-    pub artifact_id: String,
+    /// Group ID of the artifact in the registry (optional - resolved from name if not provided)
+    #[serde(default)]
+    pub group_id: Option<String>,
+    /// Artifact ID in the registry (optional - resolved from name if not provided)
+    #[serde(default)]
+    pub artifact_id: Option<String>,
     /// Version specification (supports semver ranges like ^1.0.0, ~2.1.0)
     pub version: String,
     /// Name of the registry to fetch from (must match a registry name)
@@ -381,6 +387,46 @@ impl PublishConfig {
     }
 }
 
+impl DependencyConfig {
+    /// Get the resolved group ID for this dependency configuration
+    ///
+    /// If `group_id` is explicitly set, uses that value. Otherwise:
+    /// - If `name` contains '/', uses the part before '/' as group ID
+    /// - Otherwise defaults to "default"
+    ///
+    /// # Examples
+    /// - name: "com.example/my-service" → group_id: "com.example"
+    /// - name: "my-service" → group_id: "default"
+    pub fn resolved_group_id(&self) -> String {
+        self.group_id.clone().unwrap_or_else(|| {
+            if let Some((group, _)) = self.name.split_once('/') {
+                group.to_string()
+            } else {
+                "default".to_string()
+            }
+        })
+    }
+
+    /// Get the resolved artifact ID for this dependency configuration
+    ///
+    /// If `artifact_id` is explicitly set, uses that value. Otherwise:
+    /// - If `name` contains '/', uses the part after '/' as artifact ID
+    /// - Otherwise uses the entire `name` as artifact ID
+    ///
+    /// # Examples
+    /// - name: "com.example/my-service" → artifact_id: "my-service"
+    /// - name: "my-service" → artifact_id: "my-service"
+    pub fn resolved_artifact_id(&self) -> String {
+        self.artifact_id.clone().unwrap_or_else(|| {
+            if let Some((_, artifact)) = self.name.split_once('/') {
+                artifact.to_string()
+            } else {
+                self.name.clone()
+            }
+        })
+    }
+}
+
 impl ArtifactReference {
     /// Validate that the version is exact (no semver ranges)
     pub fn validate_exact_version(&self) -> anyhow::Result<()> {
@@ -499,4 +545,167 @@ pub fn expand_env_placeholders(input: &str) -> String {
 pub fn preprocess_config(path: &Path) -> anyhow::Result<String> {
     let raw_data = fs::read_to_string(path)?;
     Ok(expand_env_placeholders(&raw_data))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dependency_smart_resolution() {
+        // Test group/artifact format
+        let dep_with_slash = DependencyConfig {
+            name: "com.example/user-service".to_string(),
+            group_id: None,
+            artifact_id: None,
+            version: "1.0.0".to_string(),
+            registry: "test".to_string(),
+            output_path: "out.proto".to_string(),
+        };
+
+        assert_eq!(dep_with_slash.resolved_group_id(), "com.example");
+        assert_eq!(dep_with_slash.resolved_artifact_id(), "user-service");
+
+        // Test simple name format
+        let dep_simple = DependencyConfig {
+            name: "user-service".to_string(),
+            group_id: None,
+            artifact_id: None,
+            version: "1.0.0".to_string(),
+            registry: "test".to_string(),
+            output_path: "out.proto".to_string(),
+        };
+
+        assert_eq!(dep_simple.resolved_group_id(), "default");
+        assert_eq!(dep_simple.resolved_artifact_id(), "user-service");
+
+        // Test explicit values override smart resolution
+        let dep_explicit = DependencyConfig {
+            name: "com.example/user-service".to_string(),
+            group_id: Some("custom.group".to_string()),
+            artifact_id: Some("custom-artifact".to_string()),
+            version: "1.0.0".to_string(),
+            registry: "test".to_string(),
+            output_path: "out.proto".to_string(),
+        };
+
+        assert_eq!(dep_explicit.resolved_group_id(), "custom.group");
+        assert_eq!(dep_explicit.resolved_artifact_id(), "custom-artifact");
+
+        // Test the example from the attachment
+        let dep_nprod = DependencyConfig {
+            name: "nprod/sp.frame.Frame".to_string(),
+            group_id: None,
+            artifact_id: None,
+            version: "4.3.1".to_string(),
+            registry: "nprod-apicurio".to_string(),
+            output_path: "protos/sp/frame/frame.proto".to_string(),
+        };
+
+        assert_eq!(dep_nprod.resolved_group_id(), "nprod");
+        assert_eq!(dep_nprod.resolved_artifact_id(), "sp.frame.Frame");
+    }
+
+    #[test]
+    fn test_dependency_smart_resolution_edge_cases() {
+        // Test with multiple slashes (only first split should be used)
+        let dep_multi_slash = DependencyConfig {
+            name: "com.example/nested/artifact".to_string(),
+            group_id: None,
+            artifact_id: None,
+            version: "1.0.0".to_string(),
+            registry: "test".to_string(),
+            output_path: "out.proto".to_string(),
+        };
+
+        assert_eq!(dep_multi_slash.resolved_group_id(), "com.example");
+        assert_eq!(dep_multi_slash.resolved_artifact_id(), "nested/artifact");
+
+        // Test with empty group part
+        let dep_empty_group = DependencyConfig {
+            name: "/artifact-only".to_string(),
+            group_id: None,
+            artifact_id: None,
+            version: "1.0.0".to_string(),
+            registry: "test".to_string(),
+            output_path: "out.proto".to_string(),
+        };
+
+        assert_eq!(dep_empty_group.resolved_group_id(), "");
+        assert_eq!(dep_empty_group.resolved_artifact_id(), "artifact-only");
+
+        // Test with empty artifact part
+        let dep_empty_artifact = DependencyConfig {
+            name: "group.only/".to_string(),
+            group_id: None,
+            artifact_id: None,
+            version: "1.0.0".to_string(),
+            registry: "test".to_string(),
+            output_path: "out.proto".to_string(),
+        };
+
+        assert_eq!(dep_empty_artifact.resolved_group_id(), "group.only");
+        assert_eq!(dep_empty_artifact.resolved_artifact_id(), "");
+
+        // Test partial override (only group_id specified)
+        let dep_partial_override = DependencyConfig {
+            name: "com.example/user-service".to_string(),
+            group_id: Some("override.group".to_string()),
+            artifact_id: None, // Should use smart resolution from name
+            version: "1.0.0".to_string(),
+            registry: "test".to_string(),
+            output_path: "out.proto".to_string(),
+        };
+
+        assert_eq!(dep_partial_override.resolved_group_id(), "override.group");
+        assert_eq!(dep_partial_override.resolved_artifact_id(), "user-service");
+
+        // Test partial override (only artifact_id specified)
+        let dep_partial_override2 = DependencyConfig {
+            name: "com.example/user-service".to_string(),
+            group_id: None, // Should use smart resolution from name
+            artifact_id: Some("override-artifact".to_string()),
+            version: "1.0.0".to_string(),
+            registry: "test".to_string(),
+            output_path: "out.proto".to_string(),
+        };
+
+        assert_eq!(dep_partial_override2.resolved_group_id(), "com.example");
+        assert_eq!(
+            dep_partial_override2.resolved_artifact_id(),
+            "override-artifact"
+        );
+    }
+
+    #[test]
+    fn test_dependency_resolution_consistency_with_publish() {
+        // Ensure DependencyConfig and PublishConfig resolve identically
+        let name = "com.example/user-service";
+
+        let dep = DependencyConfig {
+            name: name.to_string(),
+            group_id: None,
+            artifact_id: None,
+            version: "1.0.0".to_string(),
+            registry: "test".to_string(),
+            output_path: "out.proto".to_string(),
+        };
+
+        let publish = PublishConfig {
+            name: name.to_string(),
+            input_path: "input.proto".to_string(),
+            version: "1.0.0".to_string(),
+            registry: "test".to_string(),
+            group_id: None,
+            artifact_id: None,
+            r#type: None,
+            if_exists: IfExistsAction::Fail,
+            description: None,
+            labels: std::collections::HashMap::new(),
+            references: Vec::new(),
+        };
+
+        assert_eq!(dep.resolved_group_id(), publish.resolved_group_id());
+        assert_eq!(dep.resolved_artifact_id(), publish.resolved_artifact_id());
+    }
 }

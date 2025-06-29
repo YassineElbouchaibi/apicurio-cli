@@ -1,0 +1,61 @@
+# Example configuration demonstrating smart dependency resolution
+# This configuration shows how the attached image's format is now valid
+
+dependencies:
+  # Traditional format with explicit fields (still supported)
+  - name: user-service-protos
+    groupId: com.example.services
+    artifactId: user-service
+    version: ^1.2.0
+    registry: production
+    outputPath: protos/user-service.proto
+
+  # Smart resolution format - same as the attachment!
+  - name: nprod/sp.frame.Frame
+    version: 4.3.1
+    registry: nprod-apicurio
+    outputPath: protos/sp/frame/frame.proto
+    # Automatically resolves to:
+    # groupId: nprod
+    # artifactId: sp.frame.Frame
+
+  - name: nprod/google.protobuf.timestamp
+    version: 3.15.8
+    registry: nprod-apicurio
+    outputPath: protos/google/protobuf/timestamp.proto
+    # Automatically resolves to:
+    # groupId: nprod
+    # artifactId: google.protobuf.timestamp
+
+  - name: nprod/sp.redd.v1.ReddAPI
+    version: 1.0.0
+    registry: nprod-apicurio
+    outputPath: protos/sp/redd/v1/redd_api.proto
+    # Automatically resolves to:
+    # groupId: nprod
+    # artifactId: sp.redd.v1.ReddAPI
+
+  - name: nprod/sp.redd.v1.KafkaMessage
+    version: 1.0.0
+    registry: nprod-apicurio
+    outputPath: protos/sp/redd/v1/redd_kafka.proto
+    # Automatically resolves to:
+    # groupId: nprod
+    # artifactId: sp.redd.v1.KafkaMessage
+
+  # Simple names default to "default" group
+  - name: local-service
+    version: ^1.0.0
+    registry: local
+    outputPath: protos/local.proto
+    # Automatically resolves to:
+    # groupId: default
+    # artifactId: local-service
+
+  # Override smart resolution when needed
+  - name: my-alias  # Just a local alias
+    groupId: com.special.group      # Explicit override
+    artifactId: special-artifact    # Explicit override
+    version: ^2.0.0
+    registry: production
+    outputPath: protos/special.proto

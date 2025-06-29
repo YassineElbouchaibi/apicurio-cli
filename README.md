@@ -108,6 +108,45 @@ dependencies:
     registry: production
     outputPath: schemas/payment.avsc
 
+### Smart Dependency Resolution
+
+Dependencies support smart resolution of `groupId` and `artifactId` from the `name` field:
+
+```yaml
+dependencies:
+  # Smart resolution from group/artifact format
+  - name: com.example/user-service  # → groupId: com.example, artifactId: user-service
+    version: ^1.0.0
+    registry: production
+    outputPath: protos/user-service.proto
+    
+  # Smart resolution with simple name  
+  - name: payment-events           # → groupId: default, artifactId: payment-events
+    version: ~2.1.0
+    registry: production
+    outputPath: schemas/payment.avsc
+    
+  # Complex artifact names work too
+  - name: nprod/sp.frame.Frame     # → groupId: nprod, artifactId: sp.frame.Frame
+    version: 4.3.1
+    registry: nprod-apicurio
+    outputPath: protos/sp/frame/frame.proto
+    
+  # Explicit override of smart resolution
+  - name: custom-name              # Name is just an alias
+    groupId: com.special.group     # Explicit groupId overrides smart resolution
+    artifactId: actual-artifact    # Explicit artifactId overrides smart resolution  
+    version: ^1.0.0
+    registry: production
+    outputPath: protos/special.proto
+```
+
+**Smart Resolution Rules:**
+- If `name` contains `/`: `groupId` = part before `/`, `artifactId` = part after `/`
+- If `name` is simple: `groupId` = `"default"`, `artifactId` = entire name
+- Explicit `groupId`/`artifactId` fields override smart resolution
+- This matches the behavior of publishing configuration
+
 # Artifacts to publish
 publishes:
   - name: com.example/my-service
@@ -401,12 +440,17 @@ registries:
 
 # Dependencies to fetch
 dependencies:
-  - name: string           # Required: local alias
-    groupId: string        # Required: artifact group
-    artifactId: string     # Required: artifact ID
+  - name: string           # Required: local alias (can use group/artifact format)
+    groupId: string        # Optional: artifact group (resolved from name if not provided)  
+    artifactId: string     # Optional: artifact ID (resolved from name if not provided)
     version: string        # Required: semver specification
     registry: string       # Required: registry name reference
     outputPath: string     # Required: local file path
+
+# Smart Resolution Examples:
+# name: "com.example/user-service" → groupId: "com.example", artifactId: "user-service"
+# name: "user-service" → groupId: "default", artifactId: "user-service"
+# name: "nprod/sp.frame.Frame" → groupId: "nprod", artifactId: "sp.frame.Frame"
 
 # Publishing configuration
 publishes:
