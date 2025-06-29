@@ -1,0 +1,106 @@
+# Example Apicurio CLI Configuration
+#
+# This file demonstrates various configuration options for the Apicurio CLI.
+# Copy this to your project as 'apicurioconfig.yaml' and customize as needed.
+
+# Optional: Path to external registries file for additional registry definitions
+# Supports environment variable expansion
+externalRegistriesFile: ${APICURIO_REGISTRIES_PATH:-}
+
+# Registry definitions - can be overridden by global registries
+registries:
+  # Production registry with bearer token authentication
+  - name: production
+    url: https://registry.company.com
+    auth:
+      type: bearer
+      tokenEnv: APICURIO_PROD_TOKEN
+
+  # Staging registry with basic authentication
+  - name: staging
+    url: https://staging-registry.company.com
+    auth:
+      type: basic
+      username: admin
+      passwordEnv: STAGING_PASSWORD
+
+  # Local development registry (no auth)
+  - name: local
+    url: http://localhost:8080
+    auth:
+      type: none
+
+# Dependencies to fetch from registries
+dependencies:
+  # Protobuf service definition with semver range
+  - name: user-service-protos
+    groupId: com.company.services
+    artifactId: user-service
+    version: ^1.2.0  # Compatible releases >= 1.2.0, < 2.0.0
+    registry: production
+    outputPath: protos/user-service.proto
+
+  # Avro schema with patch-level updates
+  - name: payment-events
+    groupId: com.company.events
+    artifactId: payment-events
+    version: ~2.1.0  # Reasonably close >= 2.1.0, < 2.2.0
+    registry: production
+    outputPath: schemas/payment-events.avsc
+
+  # JSON Schema with exact version
+  - name: api-models
+    groupId: com.company.api
+    artifactId: models
+    version: 1.0.5  # Exact version
+    registry: staging
+    outputPath: schemas/api-models.json
+
+  # OpenAPI specification
+  - name: rest-api
+    groupId: com.company.api
+    artifactId: rest-api
+    version: ^3.0.0
+    registry: production
+    outputPath: specs/rest-api.yaml
+
+# Publishing configuration for uploading artifacts
+publishes:
+  # Protobuf service with explicit configuration
+  - name: com.company.services/my-service
+    inputPath: protos/my-service.proto
+    version: 1.0.0
+    registry: production
+    type: protobuf
+    description: "My service API definition"
+    ifExists: CREATE_VERSION
+    labels:
+      team: backend
+      service: my-service
+      environment: production
+    references:
+      - name: com.company.common/base-types
+        version: 2.1.0
+        nameAlias: "base.proto"
+
+  # Avro schema with smart defaults
+  - name: user-events
+    inputPath: schemas/user-events.avsc
+    version: 2.0.1
+    registry: production
+    # type: avro  # Auto-detected from .avsc extension
+    # groupId: default  # Defaults from name
+    # artifactId: user-events  # Defaults from name
+    description: "User domain events schema"
+    ifExists: FIND_OR_CREATE_VERSION
+
+  # JSON Schema publication
+  - name: config-schema
+    inputPath: schemas/config.json
+    version: 1.2.0
+    registry: staging
+    type: json-schema
+    description: "Application configuration schema"
+    labels:
+      category: configuration
+      format: json-schema

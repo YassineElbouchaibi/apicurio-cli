@@ -1,6 +1,6 @@
 /target
 
 # Used for testing
-apicurioconfig.yaml
-apicuriolock.yaml
+/apicurioconfig.yaml
+/apicuriolock.yaml
 /protos
