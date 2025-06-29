@@ -1,25 +1,87 @@
 #!/bin/bash
 
 # Release script for Apicurio CLI
-# Usage: ./scripts/release.sh <version>
+# Usage: ./scripts/release.sh <version|patch|minor|major>
 
 set -e
 
 if [ $# -ne 1 ]; then
-    echo "Usage: $0 <version>"
-    echo "Example: $0 0.1.0"
+    echo "Usage: $0 <version|patch|minor|major>"
+    echo "Examples:"
+    echo "  $0 0.1.0      # Set specific version"
+    echo "  $0 patch      # Bump patch version (0.1.3 -> 0.1.4)"
+    echo "  $0 minor      # Bump minor version (0.1.3 -> 0.2.0)"
+    echo "  $0 major      # Bump major version (0.1.3 -> 1.0.0)"
     exit 1
 fi
 
-VERSION=$1
+INPUT=$1
 
-# Validate version format
-if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-    echo "Error: Version must be in format x.y.z (e.g., 0.1.0)"
+# Function to get current version from Cargo.toml
+get_current_version() {
+    grep '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/'
+}
+
+# Function to bump version based on type
+bump_version() {
+    local current_version=$1
+    local bump_type=$2
+    
+    IFS='.' read -r major minor patch <<< "$current_version"
+    
+    case "$bump_type" in
+        "major")
+            major=$((major + 1))
+            minor=0
+            patch=0
+            ;;
+        "minor")
+            minor=$((minor + 1))
+            patch=0
+            ;;
+        "patch")
+            patch=$((patch + 1))
+            ;;
+        *)
+            echo "Error: Invalid bump type: $bump_type"
+            exit 1
+            ;;
+    esac
+    
+    echo "$major.$minor.$patch"
+}
+
+# Determine the target version
+if [[ "$INPUT" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    # Specific version provided
+    VERSION=$INPUT
+elif [[ "$INPUT" =~ ^(patch|minor|major)$ ]]; then
+    # Bump type provided
+    CURRENT_VERSION=$(get_current_version)
+    if [ -z "$CURRENT_VERSION" ]; then
+        echo "Error: Could not determine current version from Cargo.toml"
+        exit 1
+    fi
+    echo "Current version: $CURRENT_VERSION"
+    VERSION=$(bump_version "$CURRENT_VERSION" "$INPUT")
+    echo "Bumping $INPUT version: $CURRENT_VERSION -> $VERSION"
+else
+    echo "Error: Argument must be either a version number (x.y.z) or bump type (patch|minor|major)"
+    echo "Examples:"
+    echo "  $0 0.1.0      # Set specific version"
+    echo "  $0 patch      # Bump patch version"
+    echo "  $0 minor      # Bump minor version"
+    echo "  $0 major      # Bump major version"
     exit 1
 fi
 
 echo "Preparing release v$VERSION..."
+
+# Validate final version format
+if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    echo "Error: Final version is not in correct format: $VERSION"
+    exit 1
+fi
 
 # Check if working directory is clean
 if ! git diff-index --quiet HEAD --; then
