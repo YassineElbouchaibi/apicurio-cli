@@ -5,7 +5,7 @@ All notable changes to the Apicurio CLI project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.5] - 2025-06-29
 
 ### Added
 - Smart dependency resolution for `groupId` and `artifactId` fields
@@ -13,11 +13,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `groupId` and `artifactId` are now optional in dependency configuration
   - Explicit fields override smart resolution when needed
   - Consistent behavior with publishing configuration
+- Advanced reference resolution system for automatic transitive dependency management
+  - New `referenceResolution` configuration section with global and per-dependency controls
+  - Flexible output path patterns with advanced variable substitution (e.g., `{artifactId.path}`, `{artifactId.lastLowercase}`)
+  - Output overrides for complex artifact name mappings
+  - Registry-specific override support with fallback to group-level mappings
+  - Per-dependency `resolveReferences` control to enable/disable reference resolution
+  - Maximum depth protection to prevent infinite recursion
+  - Support for excluding specific artifacts from resolution (set to `null`)
+- New documentation file `REFERENCE_RESOLUTION.md` with comprehensive examples
+- New example configurations:
+  - `examples/nprod-example.yaml` - Demonstrates solving complex artifact name mappings
+  - `examples/reference-resolution-example.yaml` - Shows advanced reference resolution features
 
 ### Changed
 - Dependency configuration now supports smart resolution from `name` field
 - Updated documentation with comprehensive smart resolution examples
 - Enhanced unit tests for edge cases in dependency resolution
+- Lock file generation now includes transitive dependencies from reference resolution
+- Configuration schema expanded to support reference resolution settings
 
 ### Fixed
 - Identifier matching now uses resolved values for accurate dependency lookup
