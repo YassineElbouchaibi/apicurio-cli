@@ -43,11 +43,8 @@ pub struct ReferenceResolutionConfig {
     /// Output path pattern for resolved references
     /// Variables: {groupId}, {artifactId}, {version}, {ext}
     /// Advanced variables: {artifactParts[0]}, {artifactParts[1]}, etc.
-    #[serde(
-        default = "default_reference_pattern",
-        skip_serializing_if = "is_default_reference_pattern"
-    )]
-    pub output_pattern: String,
+    #[serde(default, skip_serializing_if = "is_default_output_patterns")]
+    pub output_patterns: OutputPatterns,
     /// Maximum depth for reference resolution (prevents infinite loops)
     #[serde(
         default = "default_max_depth",
@@ -64,17 +61,8 @@ pub struct ReferenceResolutionConfig {
 fn default_true() -> bool {
     true
 }
-
 fn is_default_true(value: &bool) -> bool {
     *value
-}
-
-fn default_reference_pattern() -> String {
-    "references/{groupId}/{artifactId}/{version}.{ext}".to_string()
-}
-
-fn is_default_reference_pattern(value: &str) -> bool {
-    value == default_reference_pattern()
 }
 
 fn default_max_depth() -> u32 {
@@ -87,6 +75,94 @@ fn is_default_max_depth(value: &u32) -> bool {
 
 fn is_default_reference_resolution(config: &ReferenceResolutionConfig) -> bool {
     config == &ReferenceResolutionConfig::default()
+}
+
+fn is_default_output_patterns(patterns: &OutputPatterns) -> bool {
+    patterns == &OutputPatterns::default()
+}
+
+fn is_default_dependency_defaults(config: &DependencyDefaultsConfig) -> bool {
+    config.registry.is_none() && config.output_patterns == OutputPatterns::default()
+}
+
+/// Patterns for generating output paths per artifact type
+#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct OutputPatterns {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protobuf: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avro: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub json: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub openapi: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub asyncapi: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub graphql: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub xml: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wsdl: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub other: Option<String>,
+}
+
+impl OutputPatterns {
+    /// Get the pattern for an artifact type if defined
+    pub fn get(&self, artifact_type: &str) -> Option<&String> {
+        match artifact_type.to_lowercase().as_str() {
+            "protobuf" => self.protobuf.as_ref(),
+            "avro" => self.avro.as_ref(),
+            "json" => self.json.as_ref(),
+            "openapi" => self.openapi.as_ref(),
+            "asyncapi" => self.asyncapi.as_ref(),
+            "graphql" => self.graphql.as_ref(),
+            "xml" => self.xml.as_ref(),
+            "wsdl" => self.wsdl.as_ref(),
+            _ => self.other.as_ref(),
+        }
+    }
+
+    /// Resolve the pattern for an artifact type using optional fallback patterns
+    pub fn resolve(&self, artifact_type: &str, fallback: Option<&OutputPatterns>) -> String {
+        if let Some(p) = self.get(artifact_type) {
+            return p.clone();
+        }
+        if let Some(fb) = fallback {
+            if let Some(p) = fb.get(artifact_type) {
+                return p.clone();
+            }
+        }
+        default_pattern_for(artifact_type).to_string()
+    }
+}
+
+fn default_pattern_for(artifact_type: &str) -> &'static str {
+    match artifact_type.to_lowercase().as_str() {
+        "protobuf" => "protos/{artifactId.path}/{artifactId.lastSnakeCase}.proto",
+        "avro" => "schemas/{artifactId.path}/{artifactId.lastSnakeCase}.avsc",
+        "json" => "schemas/{artifactId.path}/{artifactId.lastSnakeCase}.json",
+        "openapi" => "openapi/{artifactId.path}/{artifactId.lastSnakeCase}.yaml",
+        "asyncapi" => "asyncapi/{artifactId.path}/{artifactId.lastSnakeCase}.yaml",
+        "graphql" => "graphql/{artifactId.path}/{artifactId.lastSnakeCase}.graphql",
+        "xml" => "schemas/{artifactId.path}/{artifactId.lastSnakeCase}.xsd",
+        "wsdl" => "wsdl/{artifactId.path}/{artifactId.lastSnakeCase}.wsdl",
+        _ => "schemas/{artifactId.path}/{artifactId.lastSnakeCase}.{ext}",
+    }
+}
+
+/// Default settings for dependency resolution
+#[derive(Deserialize, Serialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DependencyDefaultsConfig {
+    /// Default registry to use when not specified on a dependency
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub registry: Option<String>,
+    /// Patterns for dependency output paths when `outputPath` is omitted
+    #[serde(default, skip_serializing_if = "is_default_output_patterns")]
+    pub output_patterns: OutputPatterns,
 }
 
 /// Repository-specific configuration loaded from `apicurioconfig.yaml`
@@ -128,6 +204,9 @@ pub struct RepoConfig {
     /// Configuration for automatic reference resolution
     #[serde(default, skip_serializing_if = "is_default_reference_resolution")]
     pub reference_resolution: ReferenceResolutionConfig,
+    /// Default values applied to dependencies when fields are omitted
+    #[serde(default, skip_serializing_if = "is_default_dependency_defaults")]
+    pub dependency_defaults: DependencyDefaultsConfig,
     /// Artifacts to publish to registries
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub publishes: Vec<PublishConfig>,
@@ -203,9 +282,11 @@ pub struct DependencyConfig {
     /// Version specification (supports semver ranges like ^1.0.0, ~2.1.0)
     pub version: String,
     /// Name of the registry to fetch from (must match a registry name)
-    pub registry: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub registry: Option<String>,
     /// Local path where the artifact should be saved
-    pub output_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_path: Option<String>,
     /// Override reference resolution for this specific dependency
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resolve_references: Option<bool>,
@@ -365,6 +446,19 @@ impl RepoConfig {
             map.insert(reg.name.clone(), reg.clone());
         }
         Ok(map.into_values().collect())
+    }
+
+    /// Return all dependencies parsed with defaults applied
+    pub fn dependencies_with_defaults(&self) -> anyhow::Result<Vec<crate::dependency::Dependency>> {
+        self.dependencies
+            .iter()
+            .map(|cfg| {
+                crate::dependency::Dependency::from_config_with_defaults(
+                    cfg,
+                    &self.dependency_defaults,
+                )
+            })
+            .collect()
     }
 }
 
@@ -631,8 +725,8 @@ mod tests {
             group_id: None,
             artifact_id: None,
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 
@@ -645,8 +739,8 @@ mod tests {
             group_id: None,
             artifact_id: None,
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 
@@ -659,8 +753,8 @@ mod tests {
             group_id: Some("custom.group".to_string()),
             artifact_id: Some("custom-artifact".to_string()),
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 
@@ -673,8 +767,8 @@ mod tests {
             group_id: None,
             artifact_id: None,
             version: "4.3.1".to_string(),
-            registry: "nprod-apicurio".to_string(),
-            output_path: "protos/sp/frame/frame.proto".to_string(),
+            registry: Some("nprod-apicurio".to_string()),
+            output_path: Some("protos/sp/frame/frame.proto".to_string()),
             resolve_references: None,
         };
 
@@ -690,8 +784,8 @@ mod tests {
             group_id: None,
             artifact_id: None,
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 
@@ -704,8 +798,8 @@ mod tests {
             group_id: None,
             artifact_id: None,
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 
@@ -718,8 +812,8 @@ mod tests {
             group_id: None,
             artifact_id: None,
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 
@@ -732,8 +826,8 @@ mod tests {
             group_id: Some("override.group".to_string()),
             artifact_id: None, // Should use smart resolution from name
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 
@@ -746,8 +840,8 @@ mod tests {
             group_id: None, // Should use smart resolution from name
             artifact_id: Some("override-artifact".to_string()),
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 
@@ -768,8 +862,8 @@ mod tests {
             group_id: None,
             artifact_id: None,
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 
@@ -790,10 +884,35 @@ mod tests {
         assert_eq!(dep.resolved_group_id(), publish.resolved_group_id());
         assert_eq!(dep.resolved_artifact_id(), publish.resolved_artifact_id());
     }
+
     #[test]
-    fn test_empty_output_overrides_not_serialized() {
+    fn test_default_output_patterns_not_serialized() {
         let cfg = RepoConfig::default();
         let yaml = serde_yaml::to_string(&cfg).unwrap();
+        assert!(!yaml.contains("outputPatterns"));
+        assert!(!yaml.contains("dependencyDefaults"));
         assert!(!yaml.contains("outputOverrides"));
+
+        // Test with non-default values to ensure they are serialized
+        let mut cfg_with_patterns = RepoConfig::default();
+        cfg_with_patterns
+            .dependency_defaults
+            .output_patterns
+            .protobuf = Some("custom/{artifactId}.proto".to_string());
+        let yaml_with_patterns = serde_yaml::to_string(&cfg_with_patterns).unwrap();
+        assert!(yaml_with_patterns.contains("dependencyDefaults"));
+        assert!(yaml_with_patterns.contains("outputPatterns"));
+        assert!(yaml_with_patterns.contains("protobuf"));
+
+        // Test ReferenceResolutionConfig output patterns
+        let mut cfg_with_ref_patterns = RepoConfig::default();
+        cfg_with_ref_patterns
+            .reference_resolution
+            .output_patterns
+            .avro = Some("custom/{artifactId}.avsc".to_string());
+        let yaml_with_ref_patterns = serde_yaml::to_string(&cfg_with_ref_patterns).unwrap();
+        assert!(yaml_with_ref_patterns.contains("referenceResolution"));
+        assert!(yaml_with_ref_patterns.contains("outputPatterns"));
+        assert!(yaml_with_ref_patterns.contains("avro"));
     }
 }

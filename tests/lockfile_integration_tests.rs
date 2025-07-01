@@ -36,8 +36,8 @@ dependencies:
         group_id: Some("com.example".to_string()),
         artifact_id: Some("service1".to_string()),
         version: "^1.0.0".to_string(),
-        registry: "default".to_string(),
-        output_path: "./protos/service1.proto".to_string(),
+        registry: Some("default".to_string()),
+        output_path: Some("./protos/service1.proto".to_string()),
         resolve_references: None,
     }];
 
@@ -91,8 +91,8 @@ dependencies:
         group_id: Some("com.example".to_string()),
         artifact_id: Some("service1".to_string()),
         version: "^1.1.0".to_string(), // Changed version
-        registry: "default".to_string(),
-        output_path: "./protos/service1.proto".to_string(),
+        registry: Some("default".to_string()),
+        output_path: Some("./protos/service1.proto".to_string()),
         resolve_references: None,
     }];
 
@@ -113,8 +113,8 @@ fn test_formatting_changes_dont_trigger_regeneration() {
         group_id: Some("com.example".to_string()),
         artifact_id: Some("service1".to_string()),
         version: "^1.0.0".to_string(),
-        registry: "default".to_string(),
-        output_path: "./protos/service1.proto".to_string(),
+        registry: Some("default".to_string()),
+        output_path: Some("./protos/service1.proto".to_string()),
         resolve_references: None,
     }];
 
@@ -158,8 +158,8 @@ fn test_registry_changes_trigger_regeneration() {
         group_id: Some("com.example".to_string()),
         artifact_id: Some("service1".to_string()),
         version: "^1.0.0".to_string(),
-        registry: "default".to_string(),
-        output_path: "./protos".to_string(),
+        registry: Some("default".to_string()),
+        output_path: Some("./protos".to_string()),
         resolve_references: None,
     }];
 
@@ -204,8 +204,8 @@ fn test_external_registry_file_changes_trigger_regeneration() {
         group_id: Some("com.example".to_string()),
         artifact_id: Some("service1".to_string()),
         version: "^1.0.0".to_string(),
-        registry: "default".to_string(),
-        output_path: "./protos".to_string(),
+        registry: Some("default".to_string()),
+        output_path: Some("./protos".to_string()),
         resolve_references: None,
     }];
 

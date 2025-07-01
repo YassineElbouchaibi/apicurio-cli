@@ -5,8 +5,6 @@ use crate::{
     registry::RegistryClient,
 };
 use anyhow::{anyhow, Result};
-use convert_case::{Case, Casing};
-use dialoguer::Input;
 use std::path::PathBuf;
 
 pub async fn run(identifier_str: Option<String>, latest: bool) -> Result<()> {
@@ -108,21 +106,6 @@ pub async fn run(identifier_str: Option<String>, latest: bool) -> Result<()> {
         ));
     }
 
-    // Get artifact metadata to determine type for output path generation
-    let artifact_metadata = registry_client
-        .get_artifact_metadata(
-            identifier.group_id.as_ref().unwrap(),
-            identifier.artifact_id.as_ref().unwrap(),
-        )
-        .await?;
-
-    let default_output_path =
-        generate_default_output_path(&identifier, &artifact_metadata.artifact_type);
-    let output_path = Input::new()
-        .with_prompt("Output path")
-        .default(default_output_path)
-        .interact_text()?;
-
     // Generate a unique name for the dependency if needed
     let dep_name = format!(
         "{}/{}",
@@ -161,9 +144,9 @@ pub async fn run(identifier_str: Option<String>, latest: bool) -> Result<()> {
             }
         },
         version: identifier.version.unwrap(),
-        registry: identifier.registry.unwrap(),
-        output_path,
-        resolve_references: None, // Use global setting by default
+        registry: Some(identifier.registry.unwrap()),
+        output_path: None,
+        resolve_references: None,
     };
 
     if let Some(index) = existing_index {
@@ -183,97 +166,4 @@ pub async fn run(identifier_str: Option<String>, latest: bool) -> Result<()> {
     crate::commands::pull::run().await?;
 
     Ok(())
-}
-
-fn generate_default_output_path(identifier: &Identifier, artifact_type: &str) -> String {
-    let artifact_id = identifier.artifact_id.as_ref().unwrap();
-
-    match artifact_type.to_uppercase().as_str() {
-        "PROTOBUF" => {
-            // For protobuf files, use the original logic
-            let mut parts = artifact_id
-                .split('.')
-                .map(str::to_string)
-                .collect::<Vec<_>>();
-            let last = parts.pop().unwrap().to_case(Case::Snake);
-
-            let mut path = PathBuf::from("protos");
-            for seg in parts {
-                path.push(seg.to_lowercase());
-            }
-            path.push(last);
-            path.set_extension("proto");
-
-            path.to_string_lossy().into_owned()
-        }
-        "AVRO" => {
-            // For Avro schemas
-            let mut parts = artifact_id
-                .split('.')
-                .map(str::to_string)
-                .collect::<Vec<_>>();
-            let last = parts.pop().unwrap().to_case(Case::Snake);
-
-            let mut path = PathBuf::from("schemas");
-            for seg in parts {
-                path.push(seg.to_lowercase());
-            }
-            path.push(last);
-            path.set_extension("avsc");
-
-            path.to_string_lossy().into_owned()
-        }
-        "JSON" => {
-            // For JSON schemas
-            let mut parts = artifact_id
-                .split('.')
-                .map(str::to_string)
-                .collect::<Vec<_>>();
-            let last = parts.pop().unwrap().to_case(Case::Snake);
-
-            let mut path = PathBuf::from("schemas");
-            for seg in parts {
-                path.push(seg.to_lowercase());
-            }
-            path.push(last);
-            path.set_extension("json");
-
-            path.to_string_lossy().into_owned()
-        }
-        "OPENAPI" => {
-            // For OpenAPI specs
-            let mut parts = artifact_id
-                .split('.')
-                .map(str::to_string)
-                .collect::<Vec<_>>();
-            let last = parts.pop().unwrap().to_case(Case::Snake);
-
-            let mut path = PathBuf::from("openapi");
-            for seg in parts {
-                path.push(seg.to_lowercase());
-            }
-            path.push(last);
-            path.set_extension("yaml");
-
-            path.to_string_lossy().into_owned()
-        }
-        _ => {
-            // Default fallback for unknown types
-            let mut parts = artifact_id
-                .split('.')
-                .map(str::to_string)
-                .collect::<Vec<_>>();
-            let last = parts.pop().unwrap().to_case(Case::Snake);
-
-            let mut path = PathBuf::from("schemas");
-            for seg in parts {
-                path.push(seg.to_lowercase());
-            }
-            path.push(last);
-            // Use a generic extension for unknown types
-            path.set_extension("schema");
-
-            path.to_string_lossy().into_owned()
-        }
-    }
 }

@@ -337,7 +337,7 @@ impl Identifier {
 
             // Check registry match
             if let Some(registry) = &self.registry {
-                if dep.registry == *registry {
+                if dep.registry.as_deref() == Some(registry) {
                     score += 100;
                 } else {
                     is_match = false;
@@ -390,7 +390,7 @@ impl Identifier {
             let mut score = 0i64;
 
             if let Some(registry) = &self.registry {
-                if dep.registry == *registry {
+                if dep.registry.as_deref() == Some(registry) {
                     score += 100;
                 }
             }

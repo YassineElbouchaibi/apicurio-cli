@@ -22,7 +22,7 @@ pub async fn run() -> Result<()> {
     let mut any_outdated = false;
 
     for dep_cfg in &repo_cfg.dependencies {
-        let dep = Dependency::from_config(dep_cfg)?;
+        let dep = Dependency::from_config_with_defaults(dep_cfg, &repo_cfg.dependency_defaults)?;
         let client = &clients[&dep.registry];
         let versions = client
             .list_versions(&dep.group_id, &dep.artifact_id)

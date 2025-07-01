@@ -6,6 +6,7 @@ use crate::{
     constants::{APICURIO_CONFIG, APICURIO_LOCK},
     dependency::Dependency,
     lockfile::{LockFile, LockedDependency},
+    output_path,
     registry::RegistryClient,
 };
 use sha2::{Digest, Sha256};
@@ -25,7 +26,7 @@ pub async fn run() -> Result<()> {
     let mut locked: Vec<LockedDependency> = Vec::new();
     // re-resolve every semver range, download, re-lock
     for dep_cfg in &repo_cfg.dependencies {
-        let dep = Dependency::from_config(dep_cfg)?;
+        let dep = Dependency::from_config_with_defaults(dep_cfg, &repo_cfg.dependency_defaults)?;
         let client = &clients[&dep.registry];
         let versions = client
             .list_versions(&dep.group_id, &dep.artifact_id)
@@ -35,10 +36,27 @@ pub async fn run() -> Result<()> {
             .filter(|v| dep.req.matches(v))
             .max()
             .ok_or_else(|| anyhow::anyhow!("no matching version for {}", dep.name))?;
+        let metadata = client
+            .get_artifact_metadata(&dep.group_id, &dep.artifact_id)
+            .await?;
+        let output_path = dep.output_path.clone().unwrap_or_else(|| {
+            let pattern = repo_cfg
+                .dependency_defaults
+                .output_patterns
+                .resolve(&metadata.artifact_type, None);
+            output_path::generate_output_path(
+                &pattern,
+                &dep.group_id,
+                &dep.artifact_id,
+                &selected.to_string(),
+                &metadata.artifact_type,
+            )
+        });
+
         let data = client
             .download(&dep.group_id, &dep.artifact_id, selected)
             .await?;
-        let file_path = PathBuf::from(&dep.output_path);
+        let file_path = PathBuf::from(&output_path);
         if let Some(parent) = file_path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -54,7 +72,7 @@ pub async fn run() -> Result<()> {
             resolved_version: selected.to_string(),
             download_url: client.get_download_url(&dep.group_id, &dep.artifact_id, selected),
             sha256: sha,
-            output_path: dep.output_path.clone(),
+            output_path,
             group_id: dep.group_id.clone(),
             artifact_id: dep.artifact_id.clone(),
             version_spec: dep_cfg.version.clone(),

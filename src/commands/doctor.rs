@@ -1,7 +1,6 @@
 use crate::{
     config::{load_global_config, load_repo_config, GlobalConfig},
     constants::{APICURIO_CONFIG, APICURIO_LOCK},
-    dependency::Dependency,
     lockfile::LockFile,
     registry::RegistryClient,
 };
@@ -46,9 +45,7 @@ pub async fn run() -> Result<()> {
     }
 
     // 3) check each dependency’s semver & registry existence
-    for dep in &repo_cfg.dependencies {
-        let _ =
-            Dependency::from_config(dep).with_context(|| format!("invalid dep '{}'", dep.name))?;
+    for dep in repo_cfg.dependencies_with_defaults()? {
         if !seen.contains(&dep.registry) {
             return Err(anyhow::anyhow!(
                 "dependency '{}' references unknown registry '{}'",
