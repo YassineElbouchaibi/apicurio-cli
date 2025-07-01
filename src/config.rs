@@ -34,48 +34,59 @@ use std::{env, fs, path::PathBuf};
 ///
 /// Controls how transitive dependencies (references) are automatically resolved
 /// and where they are stored when not explicitly declared in dependencies.
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ReferenceResolutionConfig {
     /// Whether to automatically resolve references
-    #[serde(default = "default_true")]
+    #[serde(default = "default_true", skip_serializing_if = "is_default_true")]
     pub enabled: bool,
     /// Output path pattern for resolved references
     /// Variables: {groupId}, {artifactId}, {version}, {ext}
     /// Advanced variables: {artifactParts[0]}, {artifactParts[1]}, etc.
-    #[serde(default = "default_reference_pattern")]
+    #[serde(
+        default = "default_reference_pattern",
+        skip_serializing_if = "is_default_reference_pattern"
+    )]
     pub output_pattern: String,
     /// Maximum depth for reference resolution (prevents infinite loops)
-    #[serde(default = "default_max_depth")]
+    #[serde(
+        default = "default_max_depth",
+        skip_serializing_if = "is_default_max_depth"
+    )]
     pub max_depth: u32,
     /// Explicit output path overrides for specific artifacts
     /// Key format: "groupId/artifactId" or "registry/groupId/artifactId"
     /// Value: exact output path to use, or null to skip resolution entirely
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub output_overrides: std::collections::HashMap<String, Option<String>>,
-}
-
-impl Default for ReferenceResolutionConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            output_pattern: default_reference_pattern(),
-            max_depth: default_max_depth(),
-            output_overrides: std::collections::HashMap::new(),
-        }
-    }
 }
 
 fn default_true() -> bool {
     true
 }
 
+fn is_default_true(value: &bool) -> bool {
+    *value
+}
+
 fn default_reference_pattern() -> String {
     "references/{groupId}/{artifactId}/{version}.{ext}".to_string()
 }
 
+fn is_default_reference_pattern(value: &str) -> bool {
+    value == default_reference_pattern()
+}
+
 fn default_max_depth() -> u32 {
     5
+}
+
+fn is_default_max_depth(value: &u32) -> bool {
+    *value == default_max_depth()
+}
+
+fn is_default_reference_resolution(config: &ReferenceResolutionConfig) -> bool {
+    config == &ReferenceResolutionConfig::default()
 }
 
 /// Repository-specific configuration loaded from `apicurioconfig.yaml`
@@ -102,22 +113,23 @@ fn default_max_depth() -> u32 {
 ///     registry: production
 ///     outputPath: protos/user-service.proto
 /// ```
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct RepoConfig {
     /// Optional path to external registries file for additional registry definitions
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub external_registries_file: Option<String>,
     /// Registry definitions specific to this repository
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub registries: Vec<RegistryConfig>,
     /// Dependencies to fetch from registries
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dependencies: Vec<DependencyConfig>,
     /// Configuration for automatic reference resolution
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default_reference_resolution")]
     pub reference_resolution: ReferenceResolutionConfig,
     /// Artifacts to publish to registries
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub publishes: Vec<PublishConfig>,
 }
 
@@ -125,7 +137,7 @@ pub struct RepoConfig {
 ///
 /// Registries can be defined globally or per-repository. Repository-specific
 /// registries override global registries with the same name.
-#[derive(Deserialize, Serialize, Debug, Clone, Default)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RegistryConfig {
     /// Unique name for this registry (used as reference in dependencies)
@@ -141,7 +153,7 @@ pub struct RegistryConfig {
 ///
 /// Supports multiple authentication methods commonly used with Apicurio Registry.
 /// Credentials are always sourced from environment variables for security.
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 #[serde(tag = "type")]
 #[derive(Default)]
@@ -177,16 +189,16 @@ pub enum AuthConfig {
 /// - If `name` is in "group/artifact" format, group_id defaults to "group" and artifact_id to "artifact"
 /// - If `name` is simple, group_id defaults to "default" and artifact_id to the name
 /// - Explicit `group_id` and `artifact_id` override the smart defaults
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DependencyConfig {
     /// Local name/alias for this dependency (supports group/artifact format for smart resolution)
     pub name: String,
     /// Group ID of the artifact in the registry (optional - resolved from name if not provided)
-    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub group_id: Option<String>,
     /// Artifact ID in the registry (optional - resolved from name if not provided)
-    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub artifact_id: Option<String>,
     /// Version specification (supports semver ranges like ^1.0.0, ~2.1.0)
     pub version: String,
@@ -195,7 +207,7 @@ pub struct DependencyConfig {
     /// Local path where the artifact should be saved
     pub output_path: String,
     /// Override reference resolution for this specific dependency
-    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub resolve_references: Option<bool>,
 }
 
@@ -203,7 +215,7 @@ pub struct DependencyConfig {
 ///
 /// Defines how local artifacts should be published to registries, including
 /// metadata, references, and conflict resolution behavior.
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishConfig {
     /// Name/identifier for this publish configuration
@@ -217,25 +229,25 @@ pub struct PublishConfig {
 
     // Optional fields with smart defaults
     /// Group ID (defaults from name if contains /)
-    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub group_id: Option<String>,
     /// Artifact ID (defaults from name)
-    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub artifact_id: Option<String>,
     /// Artifact type (auto-detected from file extension if not specified)
-    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub r#type: Option<ArtifactType>,
     /// Behavior when artifact already exists
     #[serde(default)]
     pub if_exists: IfExistsAction,
     /// Human-readable description
-    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     /// Key-value labels for metadata
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub labels: std::collections::HashMap<String, String>,
     /// References to other artifacts
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub references: Vec<ArtifactReference>,
 }
 
@@ -243,7 +255,7 @@ pub struct PublishConfig {
 ///
 /// The CLI can auto-detect most types from file extensions, but explicit
 /// specification is supported for edge cases.
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ArtifactType {
     /// Protocol Buffers (.proto files)
@@ -265,7 +277,7 @@ pub enum ArtifactType {
 }
 
 /// Behavior when publishing an artifact that already exists
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[derive(Default)]
 pub enum IfExistsAction {
@@ -283,25 +295,25 @@ pub enum IfExistsAction {
 /// Artifacts can reference other artifacts to establish dependencies.
 /// References must use exact versions (no semver ranges) to ensure
 /// deterministic builds.
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtifactReference {
     // Either use name (group/artifact format) or explicit groupId/artifactId
     /// Name in group/artifact format (alternative to explicit groupId/artifactId)
-    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     /// Explicit group ID (alternative to name)
-    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub group_id: Option<String>,
     /// Explicit artifact ID (alternative to name)
-    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub artifact_id: Option<String>,
 
     /// EXACT version only (e.g., "1.2.3"), no ranges
     pub version: String,
 
     /// Optional alias for imports (e.g., "text_message.proto")
-    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name_alias: Option<String>,
 }
 
@@ -309,11 +321,11 @@ pub struct ArtifactReference {
 ///
 /// This configuration is loaded from `~/.config/apicurio/registries.yaml`
 /// or the path specified by `APICURIO_REGISTRIES_PATH` environment variable.
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GlobalConfig {
     /// Shared registry definitions
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub registries: Vec<RegistryConfig>,
 }
 
@@ -568,6 +580,12 @@ pub fn save_global_config(cfg: &GlobalConfig) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub fn save_repo_config(cfg: &RepoConfig, path: &Path) -> anyhow::Result<()> {
+    let data = serde_yaml::to_string(cfg)?;
+    fs::write(path, data)?;
+    Ok(())
+}
+
 pub fn expand_env_placeholders(input: &str) -> String {
     let re = Regex::new(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(:?[-+])([^}]*))?\}").unwrap();
     re.replace_all(input, |caps: &regex::Captures| {
@@ -771,5 +789,11 @@ mod tests {
 
         assert_eq!(dep.resolved_group_id(), publish.resolved_group_id());
         assert_eq!(dep.resolved_artifact_id(), publish.resolved_artifact_id());
+    }
+    #[test]
+    fn test_empty_output_overrides_not_serialized() {
+        let cfg = RepoConfig::default();
+        let yaml = serde_yaml::to_string(&cfg).unwrap();
+        assert!(!yaml.contains("outputOverrides"));
     }
 }

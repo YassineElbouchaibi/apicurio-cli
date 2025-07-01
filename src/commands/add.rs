@@ -7,7 +7,7 @@ use crate::{
 use anyhow::{anyhow, Result};
 use convert_case::{Case, Casing};
 use dialoguer::Input;
-use std::{fs, path::PathBuf};
+use std::path::PathBuf;
 
 pub async fn run(identifier_str: Option<String>) -> Result<()> {
     // Parse the identifier string (if provided)
@@ -160,9 +160,8 @@ pub async fn run(identifier_str: Option<String>) -> Result<()> {
         println!("✅ Added dependency: {dep_name}");
     }
 
-    // Save the configuration
-    let serialized = serde_yaml::to_string(&repo)?;
-    fs::write(repo_path, serialized)?;
+    // Save the configuration preserving formatting
+    crate::config::save_repo_config(&repo, &repo_path)?;
 
     // Pull the dependency immediately
     crate::commands::pull::run().await?;
