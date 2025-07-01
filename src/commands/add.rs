@@ -9,7 +9,7 @@ use convert_case::{Case, Casing};
 use dialoguer::Input;
 use std::{fs, path::PathBuf};
 
-pub async fn run(identifier_str: Option<String>) -> Result<()> {
+pub async fn run(identifier_str: Option<String>, latest: bool) -> Result<()> {
     // Parse the identifier string (if provided)
     let mut identifier = if let Some(id_str) = identifier_str {
         Identifier::parse(&id_str)
@@ -68,8 +68,24 @@ pub async fn run(identifier_str: Option<String>) -> Result<()> {
         RegistryClient::new(registry_config)?
     };
 
-    // Now complete the version using registry access
-    if !identifier.is_complete() {
+    // Resolve version
+    if latest {
+        let group_id = identifier
+            .group_id
+            .as_ref()
+            .ok_or_else(|| anyhow!("Group ID must be specified"))?;
+        let artifact_id = identifier
+            .artifact_id
+            .as_ref()
+            .ok_or_else(|| anyhow!("Artifact ID must be specified"))?;
+        let mut versions = registry_client.list_versions(group_id, artifact_id).await?;
+        versions.sort();
+        if let Some(v) = versions.last() {
+            identifier.version = Some(v.to_string());
+        } else {
+            identifier.version = Some("1.0.0".to_string());
+        }
+    } else if !identifier.is_complete() {
         identifier
             .complete_version_with_registry(&registry_client)
             .await?;
