@@ -1,8 +1,8 @@
 use anyhow::Result;
 use std::{fs, path::Path};
 
-use crate::constants::{APICURIO_CONFIG, APICURIO_LOCK};
 use crate::config::{save_repo_config, RepoConfig};
+use crate::constants::{APICURIO_CONFIG, APICURIO_LOCK};
 
 pub async fn run() -> Result<()> {
     let cfg = Path::new(APICURIO_CONFIG);
