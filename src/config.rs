@@ -56,7 +56,6 @@ pub struct ReferenceResolutionConfig {
     pub output_overrides: std::collections::HashMap<String, Option<String>>,
 }
 
-
 fn default_true() -> bool {
     true
 }
@@ -274,8 +273,7 @@ pub enum IfExistsAction {
 /// Artifacts can reference other artifacts to establish dependencies.
 /// References must use exact versions (no semver ranges) to ensure
 /// deterministic builds.
-#[derive(Deserialize, Serialize, Debug, Clone)]
-#[derive(Default)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default)]
 #[serde_with::skip_serializing_none]
 #[serde(rename_all = "camelCase", default)]
 pub struct ArtifactReference {
@@ -581,7 +579,9 @@ pub fn save_repo_config(cfg: &RepoConfig, path: &Path) -> anyhow::Result<()> {
         Some(v) => v
             .into_sequence_mut()
             .context("dependencies not a sequence")?,
-        None => root.insert("dependencies", yaml::Separator::Auto).make_sequence(),
+        None => root
+            .insert("dependencies", yaml::Separator::Auto)
+            .make_sequence(),
     };
 
     seq.clear();
