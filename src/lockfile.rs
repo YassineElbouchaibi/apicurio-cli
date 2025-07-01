@@ -21,119 +21,10 @@
 //! - SHA256 checksums of downloaded content
 //! - Lockfile format version for compatibility
 
-use convert_case::{Case, Casing};
+use crate::output_path::{expand_pattern, extension_for_type, generate_output_path};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{fs, path::Path};
-
-/// Generate output path for a transitive dependency using the pattern
-pub fn generate_transitive_output_path(
-    pattern: &str,
-    group_id: &str,
-    artifact_id: &str,
-    version: &str,
-    artifact_type: &str,
-) -> String {
-    let ext = match artifact_type.to_lowercase().as_str() {
-        "protobuf" => "proto",
-        "avro" => "avsc",
-        "json" => "json",
-        "openapi" => "yaml",
-        "asyncapi" => "yaml",
-        "graphql" => "graphql",
-        "xml" => "xsd",
-        "wsdl" => "wsdl",
-        _ => "txt",
-    };
-
-    expand_output_pattern(pattern, group_id, artifact_id, version, ext)
-}
-
-/// Advanced pattern expansion with support for complex artifact ID transformations
-pub fn expand_output_pattern(
-    pattern: &str,
-    group_id: &str,
-    artifact_id: &str,
-    version: &str,
-    ext: &str,
-) -> String {
-    let mut result = pattern.to_string();
-
-    // Basic replacements
-    result = result.replace("{groupId}", group_id);
-    result = result.replace("{artifactId}", artifact_id);
-    result = result.replace("{version}", version);
-    result = result.replace("{ext}", ext);
-
-    // Advanced artifact ID transformations
-    // Split artifact ID by dots for path-like transformations
-    let artifact_parts: Vec<&str> = artifact_id.split('.').collect();
-
-    // Replace {artifactId.path} with dot-separated parts as path segments, excluding the last part
-    // e.g., "sp.frame.Frame" -> "sp/frame"
-    if result.contains("{artifactId.path}") {
-        let path_version = if artifact_parts.len() > 1 {
-            artifact_parts[..artifact_parts.len() - 1].join("/")
-        } else {
-            String::new() // If no dots, path is empty
-        };
-        result = result.replace("{artifactId.path}", &path_version);
-    }
-
-    // Replace {artifactId.fullPath} with all dot-separated parts as path segments
-    // e.g., "sp.frame.Frame" -> "sp/frame/Frame"
-    if result.contains("{artifactId.fullPath}") {
-        let full_path_version = artifact_parts.join("/");
-        result = result.replace("{artifactId.fullPath}", &full_path_version);
-    }
-
-    // Replace {artifactId.snake_case} with snake_case version
-    // e.g., "sp.frame.Frame" -> "sp_frame_frame"
-    if result.contains("{artifactId.snake_case}") {
-        let snake_case = artifact_id.replace('.', "_").to_lowercase();
-        result = result.replace("{artifactId.snake_case}", &snake_case);
-    }
-
-    // Replace {artifactId.kebab_case} with kebab-case version
-    // e.g., "sp.frame.Frame" -> "sp-frame-frame"
-    if result.contains("{artifactId.kebab_case}") {
-        let kebab_case = artifact_id.replace('.', "-").to_lowercase();
-        result = result.replace("{artifactId.kebab_case}", &kebab_case);
-    }
-
-    // Replace {artifactId.lowercase} with lowercase version
-    if result.contains("{artifactId.lowercase}") {
-        result = result.replace("{artifactId.lowercase}", &artifact_id.to_lowercase());
-    }
-
-    // Replace {artifactId.last} with the last part after final dot
-    // e.g., "sp.frame.Frame" -> "Frame"
-    if result.contains("{artifactId.last}") {
-        let last_part = artifact_parts.last().unwrap_or(&artifact_id);
-        result = result.replace("{artifactId.last}", last_part);
-    }
-
-    // Replace {artifactId.lastLowercase} with the last part in lowercase
-    if result.contains("{artifactId.lastLowercase}") {
-        let last_part = artifact_parts.last().unwrap_or(&artifact_id).to_lowercase();
-        result = result.replace("{artifactId.lastLowercase}", &last_part);
-    }
-
-    // Replace {artifactId.lastSnakeCase} with the last part converted to snake_case
-    if result.contains("{artifactId.lastSnakeCase}") {
-        let last_part = artifact_parts.last().unwrap_or(&artifact_id);
-        let snake_case_part = last_part.to_case(Case::Snake);
-        result = result.replace("{artifactId.lastSnakeCase}", &snake_case_part);
-    }
-
-    // Replace indexed artifact parts {artifactParts[0]}, {artifactParts[1]}, etc.
-    for (i, part) in artifact_parts.iter().enumerate() {
-        let placeholder = format!("{{artifactParts[{i}]}}");
-        result = result.replace(&placeholder, part);
-    }
-
-    result
-}
 
 /// Check output overrides and mappings to determine the final output path
 /// Returns None if the artifact should be skipped (mapped to null)
@@ -155,46 +46,32 @@ pub fn resolve_output_path(
 
     if let Some(override_pattern) = output_overrides.get(&registry_key) {
         override_pattern.as_ref().map(|pattern| {
-            expand_output_pattern(
+            expand_pattern(
                 pattern,
                 group_id,
                 artifact_id,
                 version,
-                &get_extension_for_type(artifact_type),
+                extension_for_type(artifact_type),
             )
         })
     } else if let Some(override_pattern) = output_overrides.get(&group_key) {
         override_pattern.as_ref().map(|pattern| {
-            expand_output_pattern(
+            expand_pattern(
                 pattern,
                 group_id,
                 artifact_id,
                 version,
-                &get_extension_for_type(artifact_type),
+                extension_for_type(artifact_type),
             )
         })
     } else {
-        Some(generate_transitive_output_path(
+        Some(generate_output_path(
             base_pattern,
             group_id,
             artifact_id,
             version,
             artifact_type,
         ))
-    }
-}
-
-fn get_extension_for_type(artifact_type: &str) -> String {
-    match artifact_type.to_lowercase().as_str() {
-        "protobuf" => "proto".to_string(),
-        "avro" => "avsc".to_string(),
-        "json" => "json".to_string(),
-        "openapi" => "yaml".to_string(),
-        "asyncapi" => "yaml".to_string(),
-        "graphql" => "graphql".to_string(),
-        "xml" => "xsd".to_string(),
-        "wsdl" => "wsdl".to_string(),
-        _ => "txt".to_string(),
     }
 }
 
@@ -405,8 +282,8 @@ impl LockFile {
                     d.resolved_group_id(),
                     d.resolved_artifact_id(),
                     d.version,
-                    d.registry,
-                    d.output_path
+                    d.registry.clone().unwrap_or_default(),
+                    d.output_path.clone().unwrap_or_default()
                 )
             })
             .collect();
@@ -435,6 +312,20 @@ impl LockFile {
             if let Some(ext_file) = &config.external_registries_file {
                 hasher.update(ext_file.as_bytes());
             }
+
+            if let Some(default_registry) = &config.dependency_defaults.registry {
+                hasher.update(default_registry.as_bytes());
+            }
+            let patterns = &config.dependency_defaults.output_patterns;
+            hasher.update(patterns.resolve("protobuf", None).as_bytes());
+            hasher.update(patterns.resolve("avro", None).as_bytes());
+            hasher.update(patterns.resolve("json", None).as_bytes());
+            hasher.update(patterns.resolve("openapi", None).as_bytes());
+            hasher.update(patterns.resolve("asyncapi", None).as_bytes());
+            hasher.update(patterns.resolve("graphql", None).as_bytes());
+            hasher.update(patterns.resolve("xml", None).as_bytes());
+            hasher.update(patterns.resolve("wsdl", None).as_bytes());
+            hasher.update(patterns.resolve("other", None).as_bytes());
         }
 
         hex::encode(hasher.finalize())
@@ -536,8 +427,8 @@ dependencies:{deps}"#
             group_id: Some("com.example".to_string()),
             artifact_id: Some("service1".to_string()),
             version: "1.0.0".to_string(),
-            registry: "registry1".to_string(),
-            output_path: "./protos".to_string(),
+            registry: Some("registry1".to_string()),
+            output_path: Some("./protos".to_string()),
             resolve_references: None,
         }];
 
@@ -546,8 +437,8 @@ dependencies:{deps}"#
             group_id: Some("com.example".to_string()),
             artifact_id: Some("service1".to_string()),
             version: "1.1.0".to_string(),
-            registry: "registry1".to_string(),
-            output_path: "./protos".to_string(),
+            registry: Some("registry1".to_string()),
+            output_path: Some("./protos".to_string()),
             resolve_references: None,
         }];
 
@@ -724,8 +615,8 @@ dependencies:{deps}"#
                 group_id: Some("com.example".to_string()),
                 artifact_id: Some("service_a".to_string()),
                 version: "1.0.0".to_string(),
-                registry: "registry1".to_string(),
-                output_path: "./protos".to_string(),
+                registry: Some("registry1".to_string()),
+                output_path: Some("./protos".to_string()),
                 resolve_references: None,
             },
             crate::config::DependencyConfig {
@@ -733,8 +624,8 @@ dependencies:{deps}"#
                 group_id: Some("com.example".to_string()),
                 artifact_id: Some("service_b".to_string()),
                 version: "2.0.0".to_string(),
-                registry: "registry1".to_string(),
-                output_path: "./protos".to_string(),
+                registry: Some("registry1".to_string()),
+                output_path: Some("./protos".to_string()),
                 resolve_references: None,
             },
         ];
@@ -756,8 +647,8 @@ dependencies:{deps}"#
             group_id: Some("com.example".to_string()),
             artifact_id: Some("service1".to_string()),
             version: "1.0.0".to_string(),
-            registry: "registry1".to_string(),
-            output_path: "./protos".to_string(),
+            registry: Some("registry1".to_string()),
+            output_path: Some("./protos".to_string()),
             resolve_references: None,
         }];
 
@@ -936,7 +827,7 @@ mod pattern_tests {
     #[test]
     fn test_artifact_id_path_transformations() {
         // Test artifactId.path (excludes last part)
-        let result = expand_output_pattern(
+        let result = expand_pattern(
             "protos/{artifactId.path}/{artifactId.lastLowercase}.{ext}",
             "nprod",
             "sp.frame.Frame",
@@ -946,7 +837,7 @@ mod pattern_tests {
         assert_eq!(result, "protos/sp/frame/frame.proto");
 
         // Test artifactId.fullPath (includes last part)
-        let result = expand_output_pattern(
+        let result = expand_pattern(
             "schemas/{artifactId.fullPath}.{ext}",
             "nprod",
             "sp.frame.Frame",
@@ -956,7 +847,7 @@ mod pattern_tests {
         assert_eq!(result, "schemas/sp/frame/Frame.avsc");
 
         // Test single part artifact ID
-        let result = expand_output_pattern(
+        let result = expand_pattern(
             "protos/{artifactId.path}/{artifactId.lastLowercase}.{ext}",
             "default",
             "SimpleMessage",
@@ -966,7 +857,7 @@ mod pattern_tests {
         assert_eq!(result, "protos//simplemessage.proto"); // Empty path when no dots
 
         // Test empty artifact ID edge case
-        let result = expand_output_pattern(
+        let result = expand_pattern(
             "protos/{artifactId.path}/{artifactId.lastLowercase}.{ext}",
             "default",
             "",
@@ -976,7 +867,7 @@ mod pattern_tests {
         assert_eq!(result, "protos//.proto");
 
         // Test artifactId.lastSnakeCase conversion
-        let result = expand_output_pattern(
+        let result = expand_pattern(
             "protos/{artifactId.path}/{artifactId.lastSnakeCase}.{ext}",
             "default",
             "sp.frame.PingService",
@@ -986,7 +877,7 @@ mod pattern_tests {
         assert_eq!(result, "protos/sp/frame/ping_service.proto");
 
         // Test snake_case with already snake_case name
-        let result = expand_output_pattern(
+        let result = expand_pattern(
             "protos/{artifactId.lastSnakeCase}.{ext}",
             "default",
             "already_snake_case",
@@ -996,7 +887,7 @@ mod pattern_tests {
         assert_eq!(result, "protos/already_snake_case.proto");
 
         // Test snake_case with mixed case
-        let result = expand_output_pattern(
+        let result = expand_pattern(
             "protos/{artifactId.lastSnakeCase}.{ext}",
             "default",
             "com.example.XMLHttpRequest",

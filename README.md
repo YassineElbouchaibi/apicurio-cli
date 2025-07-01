@@ -444,8 +444,8 @@ dependencies:
     groupId: string        # Optional: artifact group (resolved from name if not provided)  
     artifactId: string     # Optional: artifact ID (resolved from name if not provided)
     version: string        # Required: semver specification
-    registry: string       # Required: registry name reference
-    outputPath: string     # Required: local file path
+    registry: string       # Required unless dependencyDefaults.registry is set
+    outputPath: string     # Required unless dependencyDefaults.outputPatterns is set
 
 # Smart Resolution Examples:
 # name: "com.example/user-service" → groupId: "com.example", artifactId: "user-service"
@@ -455,11 +455,35 @@ dependencies:
 # Reference resolution configuration
 referenceResolution:
   enabled: true                     # Enable automatic reference resolution
-  outputPattern: string             # Pattern for transitive dependency paths
+  outputPatterns:                   # Patterns per artifact type
+    protobuf: string
+    avro: string
+    json: string
+    openapi: string
+    asyncapi: string
+    graphql: string
+    xml: string
+    wsdl: string
+    other: string
+    # Values fall back to dependencyDefaults.outputPatterns when unset
   maxDepth: 5                       # Maximum reference resolution depth
   outputOverrides:                  # Explicit path mappings
     "groupId/artifactId": "path/pattern"
     "registry:groupId/artifactId": "path/pattern"
+
+# Defaults applied to dependencies when fields are omitted
+dependencyDefaults:
+  registry: string            # Optional default registry name
+  outputPatterns:
+    protobuf: string
+    avro: string
+    json: string
+    openapi: string
+    asyncapi: string
+    graphql: string
+    xml: string
+    wsdl: string
+    other: string
 
 # Dependencies with per-dependency reference control
 dependencies:

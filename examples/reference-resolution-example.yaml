@@ -3,7 +3,8 @@
 # Configure reference resolution with flexible output path mappings
 referenceResolution:
   enabled: true  # Global setting - can be overridden per dependency
-  outputPattern: "references/{groupId}/{artifactId.path}/{artifactId.lastLowercase}.{ext}"
+  outputPatterns:
+    protobuf: "references/{groupId}/{artifactId.path}/{artifactId.lastLowercase}.{ext}"
   maxDepth: 5
   
   # Explicit output path mappings for specific artifacts
@@ -18,10 +19,15 @@ referenceResolution:
     # Skip certain artifacts entirely (set to null)
     "nprod/sp.internal.Debug": null
     "nprod/sp.testing.MockData": null
-    
+
     # Group-level overrides (fallback when no registry-specific match)
     "nprod/sp.frame.Frame": "protos/sp/frame/frame.{ext}"
     "nprod/google.protobuf.timestamp": "protos/google/protobuf/timestamp.{ext}"
+
+dependencyDefaults:
+  registry: nprod-apicurio
+  outputPatterns:
+    protobuf: "protos/{artifactId.path}/{artifactId.lastLowercase}.{ext}"
 
 registries:
   - name: nprod-apicurio

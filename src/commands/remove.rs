@@ -46,7 +46,7 @@ pub async fn run(identifier_str: String) -> Result<()> {
                     dep.name,
                     dep.resolved_artifact_id(),
                     dep.version,
-                    dep.registry
+                    dep.registry.as_deref().unwrap_or("<none>")
                 )
             })
             .collect();

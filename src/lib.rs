@@ -10,6 +10,7 @@ pub mod constants;
 pub mod dependency;
 pub mod identifier;
 pub mod lockfile;
+pub mod output_path;
 pub mod registry;
 
 /// CLI tool for managing schema artifacts from Apicurio Registry

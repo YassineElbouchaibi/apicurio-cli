@@ -43,8 +43,8 @@ pub struct ReferenceResolutionConfig {
     /// Output path pattern for resolved references
     /// Variables: {groupId}, {artifactId}, {version}, {ext}
     /// Advanced variables: {artifactParts[0]}, {artifactParts[1]}, etc.
-    #[serde(default = "default_reference_pattern")]
-    pub output_pattern: String,
+    #[serde(default)]
+    pub output_patterns: OutputPatterns,
     /// Maximum depth for reference resolution (prevents infinite loops)
     #[serde(default = "default_max_depth")]
     pub max_depth: u32,
@@ -59,7 +59,7 @@ impl Default for ReferenceResolutionConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            output_pattern: default_reference_pattern(),
+            output_patterns: OutputPatterns::default(),
             max_depth: default_max_depth(),
             output_overrides: std::collections::HashMap::new(),
         }
@@ -70,12 +70,79 @@ fn default_true() -> bool {
     true
 }
 
-fn default_reference_pattern() -> String {
-    "references/{groupId}/{artifactId}/{version}.{ext}".to_string()
-}
-
 fn default_max_depth() -> u32 {
     5
+}
+
+/// Patterns for generating output paths per artifact type
+#[derive(Deserialize, Serialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct OutputPatterns {
+    pub protobuf: Option<String>,
+    pub avro: Option<String>,
+    pub json: Option<String>,
+    pub openapi: Option<String>,
+    pub asyncapi: Option<String>,
+    pub graphql: Option<String>,
+    pub xml: Option<String>,
+    pub wsdl: Option<String>,
+    pub other: Option<String>,
+}
+
+impl OutputPatterns {
+    /// Get the pattern for an artifact type if defined
+    pub fn get(&self, artifact_type: &str) -> Option<&String> {
+        match artifact_type.to_lowercase().as_str() {
+            "protobuf" => self.protobuf.as_ref(),
+            "avro" => self.avro.as_ref(),
+            "json" => self.json.as_ref(),
+            "openapi" => self.openapi.as_ref(),
+            "asyncapi" => self.asyncapi.as_ref(),
+            "graphql" => self.graphql.as_ref(),
+            "xml" => self.xml.as_ref(),
+            "wsdl" => self.wsdl.as_ref(),
+            _ => self.other.as_ref(),
+        }
+    }
+
+    /// Resolve the pattern for an artifact type using optional fallback patterns
+    pub fn resolve(&self, artifact_type: &str, fallback: Option<&OutputPatterns>) -> String {
+        if let Some(p) = self.get(artifact_type) {
+            return p.clone();
+        }
+        if let Some(fb) = fallback {
+            if let Some(p) = fb.get(artifact_type) {
+                return p.clone();
+            }
+        }
+        default_pattern_for(artifact_type).to_string()
+    }
+}
+
+fn default_pattern_for(artifact_type: &str) -> &'static str {
+    match artifact_type.to_lowercase().as_str() {
+        "protobuf" => "protos/{artifactId.path}/{artifactId.lastSnakeCase}.proto",
+        "avro" => "schemas/{artifactId.path}/{artifactId.lastSnakeCase}.avsc",
+        "json" => "schemas/{artifactId.path}/{artifactId.lastSnakeCase}.json",
+        "openapi" => "openapi/{artifactId.path}/{artifactId.lastSnakeCase}.yaml",
+        "asyncapi" => "asyncapi/{artifactId.path}/{artifactId.lastSnakeCase}.yaml",
+        "graphql" => "graphql/{artifactId.path}/{artifactId.lastSnakeCase}.graphql",
+        "xml" => "schemas/{artifactId.path}/{artifactId.lastSnakeCase}.xsd",
+        "wsdl" => "wsdl/{artifactId.path}/{artifactId.lastSnakeCase}.wsdl",
+        _ => "schemas/{artifactId.path}/{artifactId.lastSnakeCase}.{ext}",
+    }
+}
+
+/// Default settings for dependency resolution
+#[derive(Deserialize, Serialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DependencyDefaultsConfig {
+    /// Default registry to use when not specified on a dependency
+    #[serde(default)]
+    pub registry: Option<String>,
+    /// Patterns for dependency output paths when `outputPath` is omitted
+    #[serde(default)]
+    pub output_patterns: OutputPatterns,
 }
 
 /// Repository-specific configuration loaded from `apicurioconfig.yaml`
@@ -116,6 +183,9 @@ pub struct RepoConfig {
     /// Configuration for automatic reference resolution
     #[serde(default)]
     pub reference_resolution: ReferenceResolutionConfig,
+    /// Default values applied to dependencies when fields are omitted
+    #[serde(default)]
+    pub dependency_defaults: DependencyDefaultsConfig,
     /// Artifacts to publish to registries
     #[serde(default)]
     pub publishes: Vec<PublishConfig>,
@@ -191,9 +261,11 @@ pub struct DependencyConfig {
     /// Version specification (supports semver ranges like ^1.0.0, ~2.1.0)
     pub version: String,
     /// Name of the registry to fetch from (must match a registry name)
-    pub registry: String,
+    #[serde(default)]
+    pub registry: Option<String>,
     /// Local path where the artifact should be saved
-    pub output_path: String,
+    #[serde(default)]
+    pub output_path: Option<String>,
     /// Override reference resolution for this specific dependency
     #[serde(default)]
     pub resolve_references: Option<bool>,
@@ -353,6 +425,19 @@ impl RepoConfig {
             map.insert(reg.name.clone(), reg.clone());
         }
         Ok(map.into_values().collect())
+    }
+
+    /// Return all dependencies parsed with defaults applied
+    pub fn dependencies_with_defaults(&self) -> anyhow::Result<Vec<crate::dependency::Dependency>> {
+        self.dependencies
+            .iter()
+            .map(|cfg| {
+                crate::dependency::Dependency::from_config_with_defaults(
+                    cfg,
+                    &self.dependency_defaults,
+                )
+            })
+            .collect()
     }
 }
 
@@ -613,8 +698,8 @@ mod tests {
             group_id: None,
             artifact_id: None,
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 
@@ -627,8 +712,8 @@ mod tests {
             group_id: None,
             artifact_id: None,
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 
@@ -641,8 +726,8 @@ mod tests {
             group_id: Some("custom.group".to_string()),
             artifact_id: Some("custom-artifact".to_string()),
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 
@@ -655,8 +740,8 @@ mod tests {
             group_id: None,
             artifact_id: None,
             version: "4.3.1".to_string(),
-            registry: "nprod-apicurio".to_string(),
-            output_path: "protos/sp/frame/frame.proto".to_string(),
+            registry: Some("nprod-apicurio".to_string()),
+            output_path: Some("protos/sp/frame/frame.proto".to_string()),
             resolve_references: None,
         };
 
@@ -672,8 +757,8 @@ mod tests {
             group_id: None,
             artifact_id: None,
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 
@@ -686,8 +771,8 @@ mod tests {
             group_id: None,
             artifact_id: None,
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 
@@ -700,8 +785,8 @@ mod tests {
             group_id: None,
             artifact_id: None,
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 
@@ -714,8 +799,8 @@ mod tests {
             group_id: Some("override.group".to_string()),
             artifact_id: None, // Should use smart resolution from name
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 
@@ -728,8 +813,8 @@ mod tests {
             group_id: None, // Should use smart resolution from name
             artifact_id: Some("override-artifact".to_string()),
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 
@@ -750,8 +835,8 @@ mod tests {
             group_id: None,
             artifact_id: None,
             version: "1.0.0".to_string(),
-            registry: "test".to_string(),
-            output_path: "out.proto".to_string(),
+            registry: Some("test".to_string()),
+            output_path: Some("out.proto".to_string()),
             resolve_references: None,
         };
 

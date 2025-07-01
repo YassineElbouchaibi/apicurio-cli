@@ -31,10 +31,11 @@ dependencies:
 referenceResolution:
   enabled: true
   maxDepth: 5
-  
+
   # Use the improved pattern: artifactId.path excludes the last part (Frame)
   # So sp.frame.Frame becomes sp/frame (without Frame)
-  outputPattern: "protos/{artifactId.path}/{artifactId.lastLowercase}.{ext}"
+  outputPatterns:
+    protobuf: "protos/{artifactId.path}/{artifactId.lastLowercase}.{ext}"
   
   # Map complex artifact names to your desired output paths
   outputOverrides:
@@ -44,6 +45,11 @@ referenceResolution:
     
     # Skip certain internal artifacts entirely
     "nprod/sp.internal.Debug": null
+
+dependencyDefaults:
+  registry: nprod-apicurio
+  outputPatterns:
+    protobuf: "protos/{artifactId.path}/{artifactId.lastLowercase}.{ext}"
 
 # The system will automatically:
 # 1. Resolve nprod/sp.redd.v1.ReddAPI to version 1.0.0

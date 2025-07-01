@@ -10,6 +10,7 @@ use crate::{
     constants::{APICURIO_CONFIG, APICURIO_LOCK},
     dependency::Dependency,
     lockfile::{resolve_output_path, LockFile, LockedDependency},
+    output_path,
     registry::RegistryClient,
 };
 
@@ -75,13 +76,13 @@ pub async fn run() -> Result<()> {
 
     // Add direct dependencies from config
     for dep_cfg in &repo_cfg.dependencies {
-        let dep = Dependency::from_config(dep_cfg)?;
+        let dep = Dependency::from_config_with_defaults(dep_cfg, &repo_cfg.dependency_defaults)?;
         dependencies_to_resolve.push(DependencyToResolve {
             group_id: dep.group_id.clone(),
             artifact_id: dep.artifact_id.clone(),
             version_req: dep_cfg.version.clone(),
             registry: dep.registry.clone(),
-            output_path: Some(dep.output_path.clone()),
+            output_path: dep.output_path.clone(),
             is_transitive: false,
             depth: 0,
         });
@@ -126,7 +127,7 @@ pub async fn run() -> Result<()> {
                 artifact_id: dep_to_resolve.artifact_id.clone(),
                 req: semver::VersionReq::parse(&dep_to_resolve.version_req)?,
                 registry: dep_to_resolve.registry.clone(),
-                output_path: dep_to_resolve.output_path.clone().unwrap_or_default(),
+                output_path: dep_to_resolve.output_path.clone(),
             };
 
             let all_versions = client
@@ -175,19 +176,36 @@ pub async fn run() -> Result<()> {
         let output_path = if let Some(path) = dep_to_resolve.output_path {
             Some(path)
         } else {
-            // Generate path for transitive dependency using pattern and overrides
             let metadata = client
                 .get_artifact_metadata(&dep_to_resolve.group_id, &dep_to_resolve.artifact_id)
                 .await?;
-            resolve_output_path(
-                &repo_cfg.reference_resolution.output_pattern,
-                &repo_cfg.reference_resolution.output_overrides,
-                &dep_to_resolve.registry,
-                &dep_to_resolve.group_id,
-                &dep_to_resolve.artifact_id,
-                &resolved_version.to_string(),
-                &metadata.artifact_type,
-            )
+            if dep_to_resolve.is_transitive {
+                let base_pattern = repo_cfg.reference_resolution.output_patterns.resolve(
+                    &metadata.artifact_type,
+                    Some(&repo_cfg.dependency_defaults.output_patterns),
+                );
+                resolve_output_path(
+                    &base_pattern,
+                    &repo_cfg.reference_resolution.output_overrides,
+                    &dep_to_resolve.registry,
+                    &dep_to_resolve.group_id,
+                    &dep_to_resolve.artifact_id,
+                    &resolved_version.to_string(),
+                    &metadata.artifact_type,
+                )
+            } else {
+                let pattern = repo_cfg
+                    .dependency_defaults
+                    .output_patterns
+                    .resolve(&metadata.artifact_type, None);
+                Some(output_path::generate_output_path(
+                    &pattern,
+                    &dep_to_resolve.group_id,
+                    &dep_to_resolve.artifact_id,
+                    &resolved_version.to_string(),
+                    &metadata.artifact_type,
+                ))
+            }
         };
 
         // Skip this dependency if it's mapped to null (excluded from resolution)
@@ -212,7 +230,11 @@ pub async fn run() -> Result<()> {
                     .dependencies
                     .iter()
                     .find(|cfg| {
-                        let dep = Dependency::from_config(cfg).unwrap();
+                        let dep = Dependency::from_config_with_defaults(
+                            cfg,
+                            &repo_cfg.dependency_defaults,
+                        )
+                        .unwrap();
                         dep.group_id == dep_to_resolve.group_id
                             && dep.artifact_id == dep_to_resolve.artifact_id
                     })
@@ -245,7 +267,8 @@ pub async fn run() -> Result<()> {
         } else {
             // For direct dependencies, check per-dependency override first
             let original_dep_config = repo_cfg.dependencies.iter().find(|cfg| {
-                let dep = Dependency::from_config(cfg).unwrap();
+                let dep = Dependency::from_config_with_defaults(cfg, &repo_cfg.dependency_defaults)
+                    .unwrap();
                 dep.group_id == dep_to_resolve.group_id
                     && dep.artifact_id == dep_to_resolve.artifact_id
             });
