@@ -72,8 +72,8 @@ Add schema dependencies to your project:
 # Interactive mode - prompts for missing information
 apicurio add
 
-# Specify full identifier
-apicurio add company-prod/com.example.services/user-service@^1.0.0
+# Automatically choose the latest version
+apicurio add --latest company-prod/com.example.services/user-service
 
 # Partial identifier - will prompt for missing parts
 apicurio add user-service@^1.0.0
