@@ -20,8 +20,6 @@ fn test_lockfile_regeneration_scenarios() {
 
     // Create initial config
     let config_content = r#"
-externalRegistriesFile: null
-registries: []
 dependencies:
   - name: "service1"
     groupId: "com.example"
@@ -79,8 +77,6 @@ dependencies:
 
     // Test 4: Modified config should trigger regeneration
     let modified_config = r#"
-externalRegistriesFile: null
-registries: []
 dependencies:
   - name: "service1"
     groupId: "com.example"
@@ -124,8 +120,6 @@ fn test_formatting_changes_dont_trigger_regeneration() {
 
     // Original config
     let config1 = r#"
-externalRegistriesFile: null
-registries: []
 dependencies:
   - name: "service1"
     groupId: "com.example"
@@ -138,8 +132,6 @@ dependencies:
     // Same config with different formatting and comments
     let config2 = r#"
 # Added a comment
-externalRegistriesFile: null
-registries: []  # Empty registries
 dependencies:
   - name: "service1"
     groupId: "com.example"
@@ -173,7 +165,6 @@ fn test_registry_changes_trigger_regeneration() {
 
     // Config with one registry
     let config1 = r#"
-externalRegistriesFile: null
 registries:
   - name: "default"
     url: "https://registry1.example.com"
@@ -188,7 +179,6 @@ dependencies:
 
     // Config with different registry URL
     let config2 = r#"
-externalRegistriesFile: null
 registries:
   - name: "default"
     url: "https://registry2.example.com"  # Different URL
@@ -221,8 +211,6 @@ fn test_external_registry_file_changes_trigger_regeneration() {
 
     // Config without external registries file
     let config1 = r#"
-externalRegistriesFile: null
-registries: []
 dependencies:
   - name: "service1"
     groupId: "com.example"
@@ -235,7 +223,6 @@ dependencies:
     // Config with external registries file
     let config2 = r#"
 externalRegistriesFile: "external-registries.yaml"
-registries: []
 dependencies:
   - name: "service1"
     groupId: "com.example"
