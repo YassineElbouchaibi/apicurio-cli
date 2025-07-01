@@ -56,7 +56,7 @@ cargo install apicurio-cli
 
 2. **Add a dependency:**
    ```bash
-   apicurio add my-registry/com.example/user-service@^1.0.0
+   apicurio add --latest my-registry/com.example/user-service
    ```
 
 3. **Pull dependencies:**
@@ -208,7 +208,7 @@ generatedAt: "1735387200000000000"
 
 | Command | Description |
 |---------|-------------|
-| `add <identifier>` | Add a new dependency (interactive if identifier incomplete) |
+| `add <identifier> [--latest]` | Add a new dependency (interactive if identifier incomplete; `--latest` selects the newest version) |
 | `remove <identifier>` | Remove a dependency by identifier |
 | `list` | List all configured dependencies and registries |
 | `status` | Check for outdated dependencies |
@@ -244,7 +244,7 @@ generatedAt: "1735387200000000000"
 apicurio init
 
 # Add a Protobuf dependency
-apicurio add production/com.example/user-service@^1.0.0
+apicurio add --latest production/com.example/user-service
 
 # Pull dependencies
 apicurio pull
@@ -264,8 +264,8 @@ apicurio registry add prod https://prod-registry.com
 apicurio registry add dev https://dev-registry.com
 
 # Add dependencies from different registries
-apicurio add prod/com.example/users@^1.0.0
-apicurio add dev/com.example/orders@^2.0.0
+apicurio add --latest prod/com.example/users
+apicurio add --latest dev/com.example/orders
 ```
 
 ### Publishing Artifacts

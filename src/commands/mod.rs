@@ -71,6 +71,8 @@ pub enum Commands {
             help = "Dependency identifier in format registry/group_id/artifact_id@version (all parts optional, will prompt for missing)"
         )]
         identifier: Option<String>,
+        #[arg(long, help = "Automatically use the latest available version")]
+        latest: bool,
     },
     #[command(about = "Remove an existing dependency by identifier")]
     Remove {
@@ -124,7 +126,7 @@ pub async fn run(cmd: Commands) -> Result<()> {
         Commands::Pull => pull::run().await,
         Commands::Update => update::run().await,
         Commands::Init => init::run().await,
-        Commands::Add { identifier } => add::run(identifier).await,
+        Commands::Add { identifier, latest } => add::run(identifier, latest).await,
         Commands::Remove { identifier } => remove::run(identifier).await,
         Commands::List => list::run().await,
         Commands::Status => status::run().await,
