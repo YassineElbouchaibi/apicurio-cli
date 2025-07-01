@@ -68,6 +68,9 @@ pub async fn run(identifier_str: String) -> Result<()> {
         let serialized = serde_yaml::to_string(&repo)?;
         fs::write(repo_path, serialized)?;
         println!("✅ Removed dependency: {dependency_name}");
+
+        // Pull the dependency immediately
+        crate::commands::pull::run().await?;
     } else {
         return Err(anyhow!("Failed to remove dependency: {}", dependency_name));
     }
