@@ -2,11 +2,9 @@ use crate::{
     config::{load_global_config, load_repo_config, DependencyConfig},
     constants::APICURIO_CONFIG,
     identifier::Identifier,
-    output_path,
     registry::RegistryClient,
 };
 use anyhow::{anyhow, Result};
-use dialoguer::Input;
 use std::path::PathBuf;
 
 pub async fn run(identifier_str: Option<String>, latest: bool) -> Result<()> {
@@ -108,30 +106,6 @@ pub async fn run(identifier_str: Option<String>, latest: bool) -> Result<()> {
         ));
     }
 
-    // Get artifact metadata to determine type for output path generation
-    let artifact_metadata = registry_client
-        .get_artifact_metadata(
-            identifier.group_id.as_ref().unwrap(),
-            identifier.artifact_id.as_ref().unwrap(),
-        )
-        .await?;
-
-    let pattern = repo
-        .dependency_defaults
-        .output_patterns
-        .resolve(&artifact_metadata.artifact_type, None);
-    let default_output_path = output_path::generate_output_path(
-        &pattern,
-        identifier.group_id.as_ref().unwrap(),
-        identifier.artifact_id.as_ref().unwrap(),
-        identifier.version.as_deref().unwrap_or("0.0.0"),
-        &artifact_metadata.artifact_type,
-    );
-    let output_path = Input::new()
-        .with_prompt("Output path")
-        .default(default_output_path)
-        .interact_text()?;
-
     // Generate a unique name for the dependency if needed
     let dep_name = format!(
         "{}/{}",
@@ -171,8 +145,8 @@ pub async fn run(identifier_str: Option<String>, latest: bool) -> Result<()> {
         },
         version: identifier.version.unwrap(),
         registry: Some(identifier.registry.unwrap()),
-        output_path: Some(output_path),
-        resolve_references: None, // Use global setting by default
+        output_path: None,
+        resolve_references: None,
     };
 
     if let Some(index) = existing_index {
