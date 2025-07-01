@@ -34,7 +34,7 @@ use std::{env, fs, path::PathBuf};
 ///
 /// Controls how transitive dependencies (references) are automatically resolved
 /// and where they are stored when not explicitly declared in dependencies.
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ReferenceResolutionConfig {
     /// Whether to automatically resolve references
@@ -58,16 +58,6 @@ pub struct ReferenceResolutionConfig {
     pub output_overrides: std::collections::HashMap<String, Option<String>>,
 }
 
-impl Default for ReferenceResolutionConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            output_patterns: OutputPatterns::default(),
-            max_depth: default_max_depth(),
-            output_overrides: std::collections::HashMap::new(),
-        }
-    }
-}
 fn default_true() -> bool {
     true
 }
