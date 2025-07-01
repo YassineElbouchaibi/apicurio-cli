@@ -65,7 +65,7 @@ jobs:
 
     services:
       apicurio-registry:
-        image: apicurio/apicurio-registry-mem:2.4.14.Final
+        image: apicurio/apicurio-registry:latest-release
         ports:
           - 8080:8080
         env:
